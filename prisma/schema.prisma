@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  MANAGEMENT
+  AUDITOR
+}
+
+enum MetricType {
+  CPU
+  MEMORY
+  DISK
+  UPTIME
+  LOG_ERROR_COUNT
+}
+
+enum Severity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+/// Alur: NEW -> ACKNOWLEDGED -> IN_PROGRESS -> PENDING_REVIEW -> CLOSED
+/// (PENDING_REVIEW dapat dikembalikan ke IN_PROGRESS)
+enum AlertStatus {
+  NEW
+  ACKNOWLEDGED
+  IN_PROGRESS
+  PENDING_REVIEW
+  CLOSED
+}
+
+enum AlertAction {
+  CREATED
+  ACKNOWLEDGED
+  STARTED
+  SUBMITTED_REVIEW
+  RETURNED
+  CLOSED
+  SEVERITY_RAISED
+}
+
+enum ThresholdOperator {
+  GT
+  GTE
+}
+
+enum RuleMetric {
+  CPU
+  MEMORY
+  DISK
+  HOST_STALE
+}
+
+enum IngestSource {
+  ELASTICSEARCH
+  CSV
+}
+
+enum NotifStatus {
+  SENT
+  FAILED
+  SKIPPED
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  ACCOUNT_LOCKED
+  PASSWORD_CHANGE
+  THRESHOLD_CREATE
+  THRESHOLD_UPDATE
+  THRESHOLD_DELETE
+  ALERT_STATUS_CHANGE
+  ALERT_EVALUATE
+  ASSET_CREATE
+  ASSET_UPDATE
+  ASSET_DELETE
+  BPD_CREATE
+  BPD_UPDATE
+  BPD_DELETE
+  REPORT_EXPORT
+  METRIC_IMPORT
+  USER_CREATE
+  USER_UPDATE
+  USER_UNLOCK
+  USER_RESET_PASSWORD
+}
+
+model User {
+  id               String    @id @default(uuid())
+  username         String    @unique
+  passwordHash     String
+  fullName         String
+  role             Role
+  isActive         Boolean   @default(true)
+  failedLoginCount Int       @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Bpd {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  region    String?
+  assets    Asset[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Asset {
+  id         String    @id @default(uuid())
+  /// Dicocokkan dengan host.name dari Metricbeat/Filebeat
+  hostname   String    @unique
+  ipAddress  String
+  /// Mis. CORE_BANKING, DATABASE, WEB, MIDDLEWARE
+  component  String
+  bpdId      String
+  bpd        Bpd       @relation(fields: [bpdId], references: [id])
+  picName    String
+  picContact String?
+  notes      String?
+  isActive   Boolean   @default(true)
+  lastSeenAt DateTime?
+  isStale    Boolean   @default(false)
+  metrics    Metric[]
+  alerts     Alert[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([bpdId, component])
+}
+
+model Metric {
+  id        BigInt       @id @default(autoincrement())
+  assetId   String
+  asset     Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  metric    MetricType
+  /// Mount point untuk DISK, string kosong untuk metrik lain
+  label     String       @default("")
+  /// Persen 0-100; UPTIME dalam milidetik; LOG_ERROR_COUNT berupa jumlah
+  value     Float
+  timestamp DateTime
+  source    IngestSource
+
+  @@unique([assetId, metric, label, timestamp])
+  @@index([assetId, metric, timestamp])
+}
+
+/// Cursor ingest per index pattern (mis. "metricbeat-*")
+model IngestionState {
+  id            String   @id
+  lastTimestamp DateTime
+  updatedAt     DateTime @updatedAt
+}
+
+model IngestionRun {
+  id           String       @id @default(uuid())
+  source       IngestSource
+  startedAt    DateTime     @default(now())
+  finishedAt   DateTime?
+  docsRead     Int          @default(0)
+  metricsSaved Int          @default(0)
+  unknownHosts String[]
+  error        String?
+}
+
+model ThresholdRule {
+  id             String     @id @default(uuid())
+  metric         RuleMetric
+  severity       Severity
+  operator       ThresholdOperator @default(GT)
+  /// Persen untuk CPU/MEMORY/DISK; menit untuk HOST_STALE
+  value          Float
+  enabled        Boolean    @default(true)
+  recommendation String?
+  updatedById    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@unique([metric, severity])
+}
+
+model Alert {
+  id               String            @id @default(uuid())
+  /// Nomor urut untuk tampilan, mis. ALT-012
+  number           Int               @unique @default(autoincrement())
+  assetId          String
+  asset            Asset             @relation(fields: [assetId], references: [id])
+  metric           RuleMetric
+  label            String            @default("")
+  severity         Severity
+  status           AlertStatus       @default(NEW)
+  /// "<assetId>:<metric>:<label>" selama alert belum CLOSED, NULL setelah CLOSED.
+  /// Unique constraint menjamin deduplikasi di level database.
+  dedupKey         String?           @unique
+  problem          String
+  value            Float
+  lastValue        Float
+  thresholdValue   Float
+  picName          String
+  recommendation   String
+  detectedAt       DateTime          @default(now())
+  lastEvaluatedAt  DateTime          @default(now())
+  /// false bila evaluasi terakhir tidak lagi menemukan kondisi ini (sudah pulih, tetapi belum ditutup manusia)
+  conditionActive  Boolean           @default(true)
+  recoveredAt      DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  closedAt         DateTime?
+  closedById       String?
+  closeNote        String?
+  events           AlertEvent[]
+  notifications    NotificationLog[]
+
+  @@index([status, severity])
+  @@index([assetId, metric, label, status])
+}
+
+/// Riwayat penanganan alert (timeline)
+model AlertEvent {
+  id            String       @id @default(uuid())
+  alertId       String
+  alert         Alert        @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  action        AlertAction
+  fromStatus    AlertStatus?
+  toStatus      AlertStatus
+  note          String?
+  evidence      String?
+  actorId       String?
+  /// "system" untuk aksi otomatis (pembuatan alert oleh evaluator)
+  actorUsername String
+  createdAt     DateTime     @default(now())
+
+  @@index([alertId, createdAt])
+}
+
+model NotificationLog {
+  id        String      @id @default(uuid())
+  /// NULL untuk pesan uji
+  alertId   String?
+  alert     Alert?      @relation(fields: [alertId], references: [id])
+  event     AlertAction
+  channel   String      @default("TELEGRAM")
+  status    NotifStatus
+  message   String
+  error     String?
+  createdAt DateTime    @default(now())
+
+  @@index([createdAt])
+}
+
+/// Append-only. UPDATE/DELETE diblokir oleh trigger database (lihat migrasi init).
+model AuditLog {
+  id            BigInt      @id @default(autoincrement())
+  action        AuditAction
+  actorId       String?
+  actorUsername String
+  entity        String?
+  entityId      String?
+  before        Json?
+  after         Json?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime    @default(now())
+
+  @@index([action, createdAt])
+  @@index([actorUsername, createdAt])
+}
