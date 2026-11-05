@@ -56,6 +56,7 @@ File `.env` tidak ikut ke git. Jangan membagikannya lewat chat.
 
 ```bash
 docker compose up -d postgres elasticsearch
+npx prisma generate
 npx prisma migrate deploy
 npm run seed
 npm run start:dev
@@ -94,6 +95,7 @@ Jalankan:
 
 ```bash
 docker compose up -d postgres
+npx prisma generate
 npx prisma migrate deploy
 npm run seed
 npm run start:dev
@@ -131,6 +133,7 @@ Setelah `git pull`, jalankan ini sebelum start, karena dependensi atau skema bis
 
 ```bash
 npm install
+npx prisma generate
 npx prisma migrate deploy
 ```
 
