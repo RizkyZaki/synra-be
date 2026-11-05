@@ -18,7 +18,7 @@ export class AlertsController {
     private readonly engine: AlertsEngineService,
   ) {}
 
-  /** Daftar alert. Filter: status (koma / "open"), severity, metric, aset, BPD, komponen, rentang waktu deteksi. */
+  /** Daftar alert. Filter: status (koma / "open"), severity, metric, aset, Host, komponen, rentang waktu deteksi. */
   @Get()
   list(@Query() q: ListAlertsQueryDto) {
     return this.alerts.list(q);
@@ -39,35 +39,35 @@ export class AlertsController {
   }
 
   /** NEW → ACKNOWLEDGED */
-  @Roles(Role.ADMIN, Role.OPERATOR)
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
   @Patch(':id/acknowledge')
   acknowledge(@Param('id', ParseUuid) id: string, @Body() dto: AlertNoteDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.alerts.transition(id, 'acknowledge', dto, actor, meta);
   }
 
   /** ACKNOWLEDGED → IN_PROGRESS (mulai remediasi, catatan wajib) */
-  @Roles(Role.ADMIN, Role.OPERATOR)
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
   @Patch(':id/start')
   start(@Param('id', ParseUuid) id: string, @Body() dto: AlertRequiredNoteDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.alerts.transition(id, 'start', dto, actor, meta);
   }
 
   /** IN_PROGRESS → PENDING_REVIEW (catatan dan bukti remediasi wajib) */
-  @Roles(Role.ADMIN, Role.OPERATOR)
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
   @Patch(':id/submit-review')
   submitReview(@Param('id', ParseUuid) id: string, @Body() dto: SubmitReviewDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.alerts.transition(id, 'submitReview', dto, actor, meta);
   }
 
   /** PENDING_REVIEW → IN_PROGRESS (dikembalikan oleh reviewer, catatan wajib) */
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Patch(':id/return')
   return(@Param('id', ParseUuid) id: string, @Body() dto: AlertRequiredNoteDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.alerts.transition(id, 'return', dto, actor, meta);
   }
 
-  /** → CLOSED. Catatan wajib. Normalnya dari PENDING_REVIEW; ADMIN juga dapat menutup langsung (mis. false positive). */
-  @Roles(Role.ADMIN)
+  /** → CLOSED. Catatan wajib. Normalnya dari PENDING_REVIEW; ADMIN dan SUPERVISOR juga dapat menutup langsung (mis. false positive). */
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Patch(':id/close')
   close(@Param('id', ParseUuid) id: string, @Body() dto: AlertRequiredNoteDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.alerts.transition(id, 'close', dto, actor, meta);

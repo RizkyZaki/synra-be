@@ -36,6 +36,13 @@ export class UsersController {
     return this.users.list(q);
   }
 
+  /** Pilihan supervisor pada form aset. */
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @Get('supervisors')
+  supervisors() {
+    return this.users.supervisors();
+  }
+
   @Get(':id')
   @ApiOkResponse({ type: UserResponseDto })
   get(@Param('id', ParseUuid) id: string) {

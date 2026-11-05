@@ -15,7 +15,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 function scopeText(r: DailyReport): string {
-  return `BPD: ${r.scope.bpd ?? 'Semua'} · Komponen: ${r.scope.component ?? 'Semua'}`;
+  return `Host: ${r.scope.host ?? 'Semua'} · Komponen: ${r.scope.component ?? 'Semua'}`;
 }
 
 export async function renderXlsx(r: DailyReport): Promise<Buffer> {
@@ -44,7 +44,7 @@ export async function renderXlsx(r: DailyReport): Promise<Buffer> {
   assets.columns = [
     { header: 'Hostname', key: 'hostname', width: 26 },
     { header: 'IP', key: 'ipAddress', width: 16 },
-    { header: 'BPD', key: 'bpd', width: 22 },
+    { header: 'Host', key: 'host', width: 22 },
     { header: 'Komponen', key: 'component', width: 16 },
     { header: 'PIC', key: 'picName', width: 22 },
     { header: 'CPU rata-rata (%)', key: 'cpuAvg', width: 16 },
@@ -63,7 +63,7 @@ export async function renderXlsx(r: DailyReport): Promise<Buffer> {
   alerts.columns = [
     { header: 'ID', key: 'code', width: 10 },
     { header: 'Hostname', key: 'hostname', width: 26 },
-    { header: 'BPD', key: 'bpd', width: 22 },
+    { header: 'Host', key: 'host', width: 22 },
     { header: 'Masalah', key: 'problem', width: 50 },
     { header: 'Severity', key: 'severity', width: 11 },
     { header: 'Status', key: 'status', width: 18 },
@@ -121,7 +121,7 @@ export function renderPdf(r: DailyReport): Promise<Buffer> {
 
     table(doc, 'Aset', r.assets, [
       { header: 'Hostname', width: 130, value: (a: DailyReport['assets'][number]) => a.hostname },
-      { header: 'BPD', width: 110, value: (a: DailyReport['assets'][number]) => a.bpd },
+      { header: 'Host', width: 110, value: (a: DailyReport['assets'][number]) => a.host },
       { header: 'Komponen', width: 85, value: (a: DailyReport['assets'][number]) => a.component },
       { header: 'CPU avg/maks', width: 75, value: (a: DailyReport['assets'][number]) => `${fmtNum(a.cpuAvg)} / ${fmtNum(a.cpuMax)}` },
       { header: 'Memori avg/maks', width: 85, value: (a: DailyReport['assets'][number]) => `${fmtNum(a.memoryAvg)} / ${fmtNum(a.memoryMax)}` },

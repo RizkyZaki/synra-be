@@ -20,7 +20,7 @@ import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('Ingestion')
 @ApiBearerAuth()
-@Roles(Role.ADMIN, Role.OPERATOR)
+@Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
 @Controller('ingestion')
 export class IngestionController {
   constructor(private readonly ingestion: IngestionService) {}

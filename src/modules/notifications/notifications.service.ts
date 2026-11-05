@@ -28,7 +28,7 @@ export class NotificationsService {
   private async deliver(alertId: string, event: AlertAction, ctx: { actor?: string; note?: string | null }) {
     const alert = await this.prisma.alert.findUnique({
       where: { id: alertId },
-      include: { asset: { include: { bpd: true } } },
+      include: { asset: { include: { host: true } } },
     });
     if (!alert) return;
     const message = buildAlertMessage(alert, event, ctx);

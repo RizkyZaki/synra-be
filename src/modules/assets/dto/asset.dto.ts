@@ -1,4 +1,5 @@
-import { PartialType } from '@nestjs/swagger';
+import { OmitType, PartialType } from '@nestjs/swagger';
+import { AssetCategory } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
@@ -36,8 +37,22 @@ export class CreateAssetDto {
   @Matches(/^[A-Z0-9_]{2,50}$/, { message: 'Komponen 2–50 karakter (huruf, angka, garis bawah).' })
   component: string;
 
-  @IsUUID('4', { message: 'BPD tidak valid.' })
-  bpdId: string;
+  @IsUUID('4', { message: 'Host tidak valid.' })
+  hostId: string;
+
+  @IsEnum(AssetCategory, { message: `Kategori harus salah satu dari: ${Object.values(AssetCategory).join(', ')}.` })
+  category: AssetCategory;
+
+  /** Mis. CPU untuk HARDWARE, VM untuk SOFTWARE. @example VM */
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase().replace(/\s+/g, '_') : value))
+  @IsString({ message: 'Tipe harus berupa teks.' })
+  @Matches(/^[A-Z0-9_]{2,50}$/, { message: 'Tipe 2–50 karakter (huruf, angka, garis bawah).' })
+  type: string;
+
+  /** Kosongkan bila yang mengisi adalah supervisor sendiri. */
+  @IsOptional()
+  @IsUUID('4', { message: 'Supervisor tidak valid.' })
+  supervisorInputId?: string;
 
   /** @example Tim Infrastruktur */
   @Transform(trim)
@@ -60,7 +75,12 @@ export class CreateAssetDto {
   notes?: string;
 }
 
-export class UpdateAssetDto extends PartialType(CreateAssetDto) {
+export class UpdateAssetDto extends PartialType(OmitType(CreateAssetDto, ['supervisorInputId'] as const)) {
+  /** Kosongkan bila yang mengubah adalah supervisor sendiri. */
+  @IsOptional()
+  @IsUUID('4', { message: 'Supervisor tidak valid.' })
+  supervisorUpdateId?: string;
+
   @IsOptional()
   @IsBoolean({ message: 'isActive harus bernilai true atau false.' })
   isActive?: boolean;
@@ -68,12 +88,20 @@ export class UpdateAssetDto extends PartialType(CreateAssetDto) {
 
 export class ListAssetsQueryDto extends PaginationQueryDto {
   @IsOptional()
-  @IsUUID('4', { message: 'bpdId harus berupa UUID yang valid.' })
-  bpdId?: string;
+  @IsUUID('4', { message: 'hostId harus berupa UUID yang valid.' })
+  hostId?: string;
 
   @IsOptional()
   @IsString({ message: 'component harus berupa teks.' })
   component?: string;
+
+  @IsOptional()
+  @IsEnum(AssetCategory, { message: `category harus salah satu dari: ${Object.values(AssetCategory).join(', ')}.` })
+  category?: AssetCategory;
+
+  @IsOptional()
+  @IsString({ message: 'type harus berupa teks.' })
+  type?: string;
 
   @IsOptional()
   @IsEnum(AssetStatus, { message: `status harus salah satu dari: ${Object.values(AssetStatus).join(', ')}.` })

@@ -34,6 +34,14 @@ export class UsersService {
     this.bcryptRounds = config.get<number>('BCRYPT_ROUNDS', 12);
   }
 
+  supervisors() {
+    return this.prisma.user.findMany({
+      where: { role: Role.SUPERVISOR, isActive: true },
+      select: { id: true, username: true, fullName: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }
+
   async list(q: ListUsersQueryDto): Promise<Paginated<UserResponseDto>> {
     const where: Prisma.UserWhereInput = {
       role: q.role,

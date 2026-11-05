@@ -23,14 +23,14 @@ const OPEN: AlertStatus[] = [
 /**
  * Alur status alert:
  * NEW → ACKNOWLEDGED → IN_PROGRESS → PENDING_REVIEW → CLOSED, dengan PENDING_REVIEW → IN_PROGRESS (dikembalikan).
- * ADMIN juga dapat menutup langsung dari status terbuka mana pun (mis. false positive); catatan selalu wajib.
+ * ADMIN dan SUPERVISOR juga dapat menutup langsung dari status terbuka mana pun (mis. false positive); catatan selalu wajib.
  */
 export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
   acknowledge: {
     from: [AlertStatus.NEW],
     to: AlertStatus.ACKNOWLEDGED,
     action: AlertAction.ACKNOWLEDGED,
-    roles: [Role.ADMIN, Role.OPERATOR],
+    roles: [Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR],
     noteRequired: false,
     evidenceRequired: false,
   },
@@ -38,7 +38,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: [AlertStatus.ACKNOWLEDGED],
     to: AlertStatus.IN_PROGRESS,
     action: AlertAction.STARTED,
-    roles: [Role.ADMIN, Role.OPERATOR],
+    roles: [Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR],
     noteRequired: true,
     evidenceRequired: false,
   },
@@ -46,7 +46,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: [AlertStatus.IN_PROGRESS],
     to: AlertStatus.PENDING_REVIEW,
     action: AlertAction.SUBMITTED_REVIEW,
-    roles: [Role.ADMIN, Role.OPERATOR],
+    roles: [Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR],
     noteRequired: true,
     evidenceRequired: true,
   },
@@ -54,7 +54,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: [AlertStatus.PENDING_REVIEW],
     to: AlertStatus.IN_PROGRESS,
     action: AlertAction.RETURNED,
-    roles: [Role.ADMIN],
+    roles: [Role.ADMIN, Role.SUPERVISOR],
     noteRequired: true,
     evidenceRequired: false,
   },
@@ -62,7 +62,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: OPEN,
     to: AlertStatus.CLOSED,
     action: AlertAction.CLOSED,
-    roles: [Role.ADMIN],
+    roles: [Role.ADMIN, Role.SUPERVISOR],
     noteRequired: true,
     evidenceRequired: false,
   },

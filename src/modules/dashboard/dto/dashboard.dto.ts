@@ -8,7 +8,7 @@ import { DateRangeDto } from '../../../common/dto/date-range.dto';
 export class ScopedRangeDto extends IntersectionType(ScopeFilterDto, DateRangeDto) {}
 
 export class TrendQueryDto extends ScopedRangeDto {
-  /** Kosongkan untuk rata-rata semua aset dalam scope BPD/komponen */
+  /** Kosongkan untuk rata-rata semua aset dalam scope Host/komponen */
   @IsOptional()
   @IsUUID('4', { message: 'assetId harus berupa UUID yang valid.' })
   assetId?: string;

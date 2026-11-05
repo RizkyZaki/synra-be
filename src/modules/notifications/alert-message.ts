@@ -8,7 +8,7 @@ export interface AlertMessageInput {
   picName: string;
   recommendation: string;
   detectedAt: Date;
-  asset: { hostname: string; ipAddress: string; component: string; bpd: { name: string } };
+  asset: { hostname: string; ipAddress: string; component: string; host: { name: string } };
 }
 
 const ICON: Record<Severity, string> = {
@@ -50,7 +50,7 @@ export function buildAlertMessage(
     `${ICON[alert.severity]} <b>[${alert.severity}] ${TITLE[event]}</b> — ${alertCode(alert.number)}`,
     '',
     `<b>Aset:</b> ${e(alert.asset.hostname)} (${e(alert.asset.ipAddress)})`,
-    `<b>BPD:</b> ${e(alert.asset.bpd.name)} · <b>Komponen:</b> ${e(alert.asset.component)}`,
+    `<b>Host:</b> ${e(alert.asset.host.name)} · <b>Komponen:</b> ${e(alert.asset.component)}`,
     `<b>Masalah:</b> ${e(alert.problem)}`,
   ];
   if (event === AlertAction.CREATED) {

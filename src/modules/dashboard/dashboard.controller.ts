@@ -4,7 +4,7 @@ import { DashboardService } from './dashboard.service';
 import { ScopeFilterDto } from '../../common/dto/scope-filter.dto';
 import { ScopedRangeDto, TopAlertsQueryDto, TrendQueryDto, UtilizationQueryDto } from './dto/dashboard.dto';
 
-/** Semua endpoint dashboard dapat difilter per BPD (bpdId) dan komponen (component). */
+/** Semua endpoint dashboard dapat difilter per Host (hostId) dan komponen (component). */
 @ApiTags('Dashboard')
 @ApiBearerAuth()
 @Controller('dashboard')

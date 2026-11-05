@@ -1,5 +1,5 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AlertStatus, Asset, AuditAction, Bpd, Prisma, Severity } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { AlertStatus, Asset, AssetCategory, AuditAction, Host, Prisma, Role, Severity } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { MetricsRepository, LatestSnapshot } from '../metrics/metrics.repository';
@@ -11,14 +11,17 @@ import { ScopeFilterDto, assetScope } from '../../common/dto/scope-filter.dto';
 import { CreateAssetDto, ListAssetsQueryDto, UpdateAssetDto } from './dto/asset.dto';
 import { AssetStatus, deriveAssetStatus, maxSeverity } from './asset-status';
 
-type AssetWithBpd = Asset & { bpd: Bpd };
+type AssetWithHost = Asset & { host: Host };
+type UserRef = { id: string; fullName: string };
 
 export interface AssetView {
   id: string;
   hostname: string;
   ipAddress: string;
   component: string;
-  bpd: { id: string; code: string; name: string };
+  host: { id: string; code: string; name: string };
+  category: AssetCategory | null;
+  type: string | null;
   picName: string;
   picContact: string | null;
   notes: string | null;
@@ -29,7 +32,12 @@ export interface AssetView {
   latest: LatestSnapshot;
   /** count = semua alert belum CLOSED; maxSeverity hanya dari alert yang kondisinya masih aktif */
   openAlerts: { count: number; activeCount: number; maxSeverity: Severity | null };
-  createdAt: Date;
+  userInput: UserRef | null;
+  dtimeInput: Date;
+  userUpdate: UserRef | null;
+  timeUpdate: Date | null;
+  supervisorInput: UserRef | null;
+  supervisorUpdate: UserRef | null;
   updatedAt: Date;
 }
 
@@ -44,6 +52,8 @@ export class AssetsService {
   async list(q: ListAssetsQueryDto) {
     const where: Prisma.AssetWhereInput = {
       ...assetScope(q),
+      ...(q.category ? { category: q.category } : {}),
+      ...(q.type ? { type: q.type } : {}),
       ...(q.search
         ? {
             OR: [
@@ -82,10 +92,14 @@ export class AssetsService {
   }
 
   async create(dto: CreateAssetDto, actor: AuthUser, meta: RequestMeta): Promise<AssetView> {
-    await this.ensureBpd(dto.bpdId);
+    await this.ensureHost(dto.hostId);
     await this.ensureHostnameFree(dto.hostname);
+    const { supervisorInputId, ...data } = dto;
+    const supervisorId = await this.resolveSupervisor(supervisorInputId, actor);
     const asset = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.asset.create({ data: dto });
+      const created = await tx.asset.create({
+        data: { ...data, userInputId: actor.id, supervisorInputId: supervisorId },
+      });
       await this.audit.log(
         { action: AuditAction.ASSET_CREATE, actorId: actor.id, actorUsername: actor.username, entity: 'Asset', entityId: created.id, after: snapshot(created), meta },
         tx,
@@ -97,10 +111,15 @@ export class AssetsService {
 
   async update(id: string, dto: UpdateAssetDto, actor: AuthUser, meta: RequestMeta): Promise<AssetView> {
     const before = await this.findOrFail(id);
-    if (dto.bpdId) await this.ensureBpd(dto.bpdId);
+    if (dto.hostId) await this.ensureHost(dto.hostId);
     if (dto.hostname && dto.hostname !== before.hostname) await this.ensureHostnameFree(dto.hostname);
+    const { supervisorUpdateId, ...data } = dto;
+    const supervisorId = await this.resolveSupervisor(supervisorUpdateId, actor);
     await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.asset.update({ where: { id }, data: dto });
+      const updated = await tx.asset.update({
+        where: { id },
+        data: { ...data, userUpdateId: actor.id, timeUpdate: new Date(), supervisorUpdateId: supervisorId },
+      });
       await this.audit.log(
         { action: AuditAction.ASSET_UPDATE, actorId: actor.id, actorUsername: actor.username, entity: 'Asset', entityId: id, before: snapshot(before), after: snapshot(updated), meta },
         tx,
@@ -124,19 +143,26 @@ export class AssetsService {
   }
 
   private async views(where: Prisma.AssetWhereInput): Promise<AssetView[]> {
-    const assets: AssetWithBpd[] = await this.prisma.asset.findMany({
+    const assets: AssetWithHost[] = await this.prisma.asset.findMany({
       where,
-      include: { bpd: true },
-      orderBy: [{ bpd: { name: 'asc' } }, { hostname: 'asc' }],
+      include: { host: true },
+      orderBy: [{ host: { name: 'asc' } }, { hostname: 'asc' }],
     });
     const ids = assets.map((a) => a.id);
-    const [snapshots, openAlerts] = await Promise.all([
+    const userIds = assets.flatMap((a) => [a.userInputId, a.userUpdateId, a.supervisorInputId, a.supervisorUpdateId]);
+    const [snapshots, openAlerts, users] = await Promise.all([
       this.metrics.latestSnapshots(ids),
       this.prisma.alert.findMany({
         where: { assetId: { in: ids }, status: { not: AlertStatus.CLOSED } },
         select: { assetId: true, severity: true, conditionActive: true },
       }),
+      this.prisma.user.findMany({
+        where: { id: { in: userIds.filter((id): id is string => id !== null) } },
+        select: { id: true, fullName: true },
+      }),
     ]);
+    const userById = new Map(users.map((u) => [u.id, u]));
+    const userRef = (id: string | null): UserRef | null => (id ? (userById.get(id) ?? null) : null);
     const alertsByAsset = new Map<string, { severity: Severity; conditionActive: boolean }[]>();
     for (const a of openAlerts) {
       alertsByAsset.set(a.assetId, [...(alertsByAsset.get(a.assetId) ?? []), a]);
@@ -151,7 +177,9 @@ export class AssetsService {
         hostname: a.hostname,
         ipAddress: a.ipAddress,
         component: a.component,
-        bpd: { id: a.bpd.id, code: a.bpd.code, name: a.bpd.name },
+        host: { id: a.host.id, code: a.host.code, name: a.host.name },
+        category: a.category,
+        type: a.type,
         picName: a.picName,
         picContact: a.picContact,
         notes: a.notes,
@@ -161,7 +189,12 @@ export class AssetsService {
         status: deriveAssetStatus({ isActive: a.isActive, isStale: a.isStale, openAlertMaxSeverity: max }),
         latest: snapshots.get(a.id)!,
         openAlerts: { count: open.length, activeCount: active.length, maxSeverity: max },
-        createdAt: a.createdAt,
+        userInput: userRef(a.userInputId),
+        dtimeInput: a.dtimeInput,
+        userUpdate: userRef(a.userUpdateId),
+        timeUpdate: a.timeUpdate,
+        supervisorInput: userRef(a.supervisorInputId),
+        supervisorUpdate: userRef(a.supervisorUpdateId),
         updatedAt: a.updatedAt,
       };
     });
@@ -173,10 +206,20 @@ export class AssetsService {
     return asset;
   }
 
-  private async ensureBpd(bpdId: string) {
-    if (!(await this.prisma.bpd.findUnique({ where: { id: bpdId } }))) {
-      throw new NotFoundException(MSG.BPD_NOT_FOUND);
+  private async ensureHost(hostId: string) {
+    if (!(await this.prisma.host.findUnique({ where: { id: hostId } }))) {
+      throw new NotFoundException(MSG.HOST_NOT_FOUND);
     }
+  }
+
+  /** Supervisor yang dipilih harus user aktif ber-role SUPERVISOR; bila kosong, supervisor yang login dipakai sendiri. */
+  private async resolveSupervisor(id: string | undefined, actor: AuthUser): Promise<string | null> {
+    if (!id) return actor.role === Role.SUPERVISOR ? actor.id : null;
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user || !user.isActive || user.role !== Role.SUPERVISOR) {
+      throw new BadRequestException(MSG.SUPERVISOR_INVALID);
+    }
+    return id;
   }
 
   private async ensureHostnameFree(hostname: string) {
@@ -191,7 +234,11 @@ function snapshot(a: Asset) {
     hostname: a.hostname,
     ipAddress: a.ipAddress,
     component: a.component,
-    bpdId: a.bpdId,
+    hostId: a.hostId,
+    category: a.category,
+    type: a.type,
+    supervisorInputId: a.supervisorInputId,
+    supervisorUpdateId: a.supervisorUpdateId,
     picName: a.picName,
     picContact: a.picContact,
     notes: a.notes,

@@ -4,20 +4,20 @@ import { IsNotEmpty, IsOptional, IsString, Matches, MaxLength } from 'class-vali
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
-export class CreateBpdDto {
+export class CreateHostDto {
   /** Kode unik, huruf besar/angka/strip. @example BPD-JTG */
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @IsString({ message: 'Kode BPD harus berupa teks.' })
+  @IsString({ message: 'Kode Host harus berupa teks.' })
   @Matches(/^[A-Z0-9-]{2,20}$/, {
-    message: 'Kode BPD 2–20 karakter, hanya huruf besar, angka, atau strip.',
+    message: 'Kode Host 2–20 karakter, hanya huruf besar, angka, atau strip.',
   })
   code: string;
 
   /** @example Bank Jateng */
   @Transform(trim)
-  @IsString({ message: 'Nama BPD harus berupa teks.' })
-  @IsNotEmpty({ message: 'Nama BPD wajib diisi.' })
-  @MaxLength(100, { message: 'Nama BPD maksimal 100 karakter.' })
+  @IsString({ message: 'Nama Host harus berupa teks.' })
+  @IsNotEmpty({ message: 'Nama Host wajib diisi.' })
+  @MaxLength(100, { message: 'Nama Host maksimal 100 karakter.' })
   name: string;
 
   /** @example Jawa Tengah */
@@ -28,4 +28,4 @@ export class CreateBpdDto {
   region?: string;
 }
 
-export class UpdateBpdDto extends PartialType(CreateBpdDto) {}
+export class UpdateHostDto extends PartialType(CreateHostDto) {}

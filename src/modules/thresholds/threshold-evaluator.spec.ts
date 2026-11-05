@@ -11,7 +11,7 @@ function asset(over: Partial<EvaluatedAsset> = {}): EvaluatedAsset {
     id: 'a1',
     hostname: 'cbs-app-01',
     isActive: true,
-    createdAt: minutesAgo(10_000),
+    dtimeInput: minutesAgo(10_000),
     lastSeenAt: minutesAgo(1),
     cpu: 20,
     memory: 40,
@@ -79,8 +79,8 @@ describe('evaluasi threshold', () => {
     });
 
     it('aset yang belum pernah mengirim data dihitung sejak didaftarkan', () => {
-      expect(evaluateAsset(asset({ lastSeenAt: null, createdAt: minutesAgo(2), cpu: null, memory: null, disks: [] }), defaults, now)).toEqual([]);
-      const [f] = evaluateAsset(asset({ lastSeenAt: null, createdAt: minutesAgo(30) }), defaults, now);
+      expect(evaluateAsset(asset({ lastSeenAt: null, dtimeInput: minutesAgo(2), cpu: null, memory: null, disks: [] }), defaults, now)).toEqual([]);
+      const [f] = evaluateAsset(asset({ lastSeenAt: null, dtimeInput: minutesAgo(30) }), defaults, now);
       expect(f.metric).toBe(RuleMetric.HOST_STALE);
       expect(f.problem).toContain('Belum pernah ada data');
     });

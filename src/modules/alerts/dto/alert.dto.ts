@@ -37,8 +37,8 @@ export class ListAlertsQueryDto extends PaginationQueryDto {
   assetId?: string;
 
   @IsOptional()
-  @IsUUID('4', { message: 'bpdId harus berupa UUID yang valid.' })
-  bpdId?: string;
+  @IsUUID('4', { message: 'hostId harus berupa UUID yang valid.' })
+  hostId?: string;
 
   @IsOptional()
   @IsString({ message: 'component harus berupa teks.' })

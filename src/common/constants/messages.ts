@@ -28,10 +28,11 @@ export const MSG = {
   CANNOT_MODIFY_SELF: 'Anda tidak dapat mengubah role atau menonaktifkan akun sendiri.',
   LAST_ADMIN: 'Tidak dapat mengubah admin aktif terakhir. Minimal harus ada satu ADMIN aktif.',
 
-  // BPD & aset
-  BPD_NOT_FOUND: 'BPD tidak ditemukan.',
-  BPD_CODE_TAKEN: 'Kode BPD sudah digunakan.',
-  BPD_HAS_ASSETS: 'BPD tidak dapat dihapus karena masih memiliki aset.',
+  // Host & aset
+  HOST_NOT_FOUND: 'Host tidak ditemukan.',
+  HOST_CODE_TAKEN: 'Kode Host sudah digunakan.',
+  HOST_HAS_ASSETS: 'Host tidak dapat dihapus karena masih memiliki aset.',
+  SUPERVISOR_INVALID: 'Supervisor harus user aktif dengan role SUPERVISOR.',
   ASSET_NOT_FOUND: 'Aset tidak ditemukan.',
   HOSTNAME_TAKEN: 'Hostname sudah terdaftar.',
   ASSET_HAS_ALERTS: 'Aset tidak dapat dihapus karena memiliki riwayat alert. Nonaktifkan aset sebagai gantinya.',

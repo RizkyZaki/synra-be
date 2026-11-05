@@ -5,7 +5,7 @@ export interface EvaluatedAsset {
   id: string;
   hostname: string;
   isActive: boolean;
-  createdAt: Date;
+  dtimeInput: Date;
   lastSeenAt: Date | null;
   cpu: number | null;
   memory: number | null;
@@ -29,8 +29,8 @@ export type RulesByMetric = Partial<Record<RuleMetric, RuleLevel[]>>;
 const fmt = (n: number) => (Math.round(n * 10) / 10).toLocaleString('id-ID');
 
 /** Menit sejak data terakhir. Aset yang belum pernah mengirim data dihitung sejak didaftarkan. */
-export function minutesSinceSeen(asset: Pick<EvaluatedAsset, 'lastSeenAt' | 'createdAt'>, now: Date): number {
-  const ref = asset.lastSeenAt ?? asset.createdAt;
+export function minutesSinceSeen(asset: Pick<EvaluatedAsset, 'lastSeenAt' | 'dtimeInput'>, now: Date): number {
+  const ref = asset.lastSeenAt ?? asset.dtimeInput;
   return Math.max(0, (now.getTime() - ref.getTime()) / 60_000);
 }
 

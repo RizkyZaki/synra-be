@@ -9,7 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
-import { BpdsModule } from './modules/bpds/bpds.module';
+import { HostsModule } from './modules/hosts/hosts.module';
 import { AssetsModule } from './modules/assets/assets.module';
 import { ThresholdsModule } from './modules/thresholds/thresholds.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -32,7 +32,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     MetricsModule,
     AuthModule,
     UsersModule,
-    BpdsModule,
+    HostsModule,
     AssetsModule,
     ThresholdsModule,
     NotificationsModule,

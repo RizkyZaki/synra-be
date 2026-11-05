@@ -9,6 +9,7 @@ datasource db {
 
 enum Role {
   ADMIN
+  SUPERVISOR
   OPERATOR
   MANAGEMENT
   AUDITOR
@@ -73,6 +74,11 @@ enum NotifStatus {
   SKIPPED
 }
 
+enum AssetCategory {
+  HARDWARE
+  SOFTWARE
+}
+
 enum AuditAction {
   LOGIN_SUCCESS
   LOGIN_FAILED
@@ -86,9 +92,9 @@ enum AuditAction {
   ASSET_CREATE
   ASSET_UPDATE
   ASSET_DELETE
-  BPD_CREATE
-  BPD_UPDATE
-  BPD_DELETE
+  HOST_CREATE
+  HOST_UPDATE
+  HOST_DELETE
   REPORT_EXPORT
   METRIC_IMPORT
   USER_CREATE
@@ -111,7 +117,7 @@ model User {
   updatedAt        DateTime  @updatedAt
 }
 
-model Bpd {
+model Host {
   id        String   @id @default(uuid())
   code      String   @unique
   name      String
@@ -122,26 +128,37 @@ model Bpd {
 }
 
 model Asset {
-  id         String    @id @default(uuid())
+  id                 String         @id @default(uuid())
   /// Dicocokkan dengan host.name dari Metricbeat/Filebeat
-  hostname   String    @unique
-  ipAddress  String
+  hostname           String         @unique
+  ipAddress          String
   /// Mis. CORE_BANKING, DATABASE, WEB, MIDDLEWARE
-  component  String
-  bpdId      String
-  bpd        Bpd       @relation(fields: [bpdId], references: [id])
-  picName    String
-  picContact String?
-  notes      String?
-  isActive   Boolean   @default(true)
-  lastSeenAt DateTime?
-  isStale    Boolean   @default(false)
-  metrics    Metric[]
-  alerts     Alert[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  component          String
+  hostId             String
+  host               Host           @relation(fields: [hostId], references: [id])
+  /// Null untuk aset lama yang belum diklasifikasikan; wajib diisi saat aset baru dibuat
+  category           AssetCategory?
+  /// Mis. CPU untuk HARDWARE, VM untuk SOFTWARE
+  type               String?
+  picName            String
+  picContact         String?
+  notes              String?
+  isActive           Boolean        @default(true)
+  lastSeenAt         DateTime?
+  isStale            Boolean        @default(false)
+  metrics            Metric[]
+  alerts             Alert[]
+  /// id pelaku disimpan tanpa FK, seperti actorId pada AlertEvent dan AuditLog
+  userInputId        String?
+  dtimeInput         DateTime       @default(now())
+  userUpdateId       String?
+  /// Waktu edit oleh user; updatedAt juga berubah saat ingest dan evaluasi otomatis
+  timeUpdate         DateTime?
+  supervisorInputId  String?
+  supervisorUpdateId String?
+  updatedAt          DateTime       @updatedAt
 
-  @@index([bpdId, component])
+  @@index([hostId, component])
 }
 
 model Metric {
@@ -179,17 +196,17 @@ model IngestionRun {
 }
 
 model ThresholdRule {
-  id             String     @id @default(uuid())
+  id             String            @id @default(uuid())
   metric         RuleMetric
   severity       Severity
   operator       ThresholdOperator @default(GT)
   /// Persen untuk CPU/MEMORY/DISK; menit untuk HOST_STALE
   value          Float
-  enabled        Boolean    @default(true)
+  enabled        Boolean           @default(true)
   recommendation String?
   updatedById    String?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   @@unique([metric, severity])
 }

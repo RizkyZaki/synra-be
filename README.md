@@ -6,6 +6,8 @@ mengevaluasi threshold, membuat alert, dan mengirim notifikasi Telegram.
 
 Stack: NestJS 11 · PostgreSQL + Prisma 6 · Elasticsearch 8 client · JWT · Swagger.
 
+Baru pertama kali menjalankan? Ikuti [panduan setup](docs/PANDUAN-SETUP.md).
+
 ## Prasyarat
 
 - Node.js 22+
@@ -18,7 +20,7 @@ cp .env.example .env              # ganti JWT_SECRET, POSTGRES_PASSWORD, SEED_AD
 docker compose up -d postgres elasticsearch
 npm install
 npx prisma migrate dev            # tabel + trigger audit append-only
-npm run seed                      # admin, (opsional) user demo, BPD + aset contoh
+npm run seed                      # admin, (opsional) user demo, host + aset contoh
 npm run start:dev
 ```
 
@@ -47,7 +49,7 @@ Index yang ditulis: `metricbeat-sim-YYYY.MM.DD` dan `filebeat-sim-YYYY.MM.DD`.
 Simulator memakai `ELASTICSEARCH_NODE` (atau `SIM_ELASTICSEARCH_NODE`). **Jangan arahkan ke
 Elasticsearch produksi.**
 
-| Host | BPD | Skenario | Hasil yang diharapkan |
+| Aset | Host | Skenario | Hasil yang diharapkan |
 |---|---|---|---|
 | cbs-app-jtg-01 | BPD-JTG | normal | ONLINE |
 | cbs-db-jtg-01 | BPD-JTG | disk `/data` hampir penuh (~96%) | alert DISK CRITICAL |
@@ -108,14 +110,15 @@ pesan validasi.
 | `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | – | Kosongkan untuk menonaktifkan (tercatat SKIPPED) |
 | `REPORT_TIMEZONE` | `Asia/Jakarta` | Zona waktu laporan harian |
 | `SEED_ADMIN_USERNAME` / `SEED_ADMIN_PASSWORD` / `SEED_ADMIN_FULLNAME` | – | Akun admin awal |
-| `SEED_DEMO_PASSWORD` | – | Bila diisi, seed membuat user `operator`, `manajemen`, `auditor` |
-| `SEED_SAMPLE_ASSETS` | `true` | Buat BPD + aset contoh yang cocok dengan simulator |
+| `SEED_DEMO_PASSWORD` | – | Bila diisi, seed membuat user `supervisor`, `operator`, `manajemen`, `auditor` |
+| `SEED_SAMPLE_ASSETS` | `true` | Buat host + aset contoh yang cocok dengan simulator |
 
 ## Role
 
 | Role | Akses |
 |---|---|
-| ADMIN | Semua: user, BPD, aset, threshold, review/penutupan alert, evaluasi manual |
+| ADMIN | Semua: user, host, aset, threshold, review/penutupan alert, evaluasi manual |
+| SUPERVISOR | Semua hak OPERATOR, review/penutupan alert, kelola host dan aset |
 | OPERATOR | Acknowledge, mulai remediasi, ajukan review alert; ingest manual; impor CSV |
 | MANAGEMENT | Read-only: dashboard, aset, alert, laporan (termasuk ekspor) |
 | AUDITOR | Read-only + audit log dan ekspornya |

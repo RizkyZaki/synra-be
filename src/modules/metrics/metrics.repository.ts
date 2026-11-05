@@ -114,7 +114,7 @@ export class MetricsRepository {
    * (`dataUntil`), agar menit yang belum sempat di-ingest tidak dihitung sebagai down.
    */
   async availability(params: {
-    assets: { id: string; createdAt: Date }[];
+    assets: { id: string; dtimeInput: Date }[];
     from: Date;
     to: Date;
     bucketSeconds: number;
@@ -144,7 +144,7 @@ export class MetricsRepository {
     const first = new Map(firsts.map((r) => [r.assetId, r.first]));
 
     for (const a of params.assets) {
-      const monitoringStart = Math.min(a.createdAt.getTime(), first.get(a.id)?.getTime() ?? Infinity);
+      const monitoringStart = Math.min(a.dtimeInput.getTime(), first.get(a.id)?.getTime() ?? Infinity);
       const start = Math.max(params.from.getTime(), monitoringStart);
       const total = Math.max(0, Math.ceil((to.getTime() - start) / (params.bucketSeconds * 1000)));
       const upBuckets = Math.min(up.get(a.id) ?? 0, total);

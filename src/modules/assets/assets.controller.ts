@@ -31,13 +31,13 @@ export class AssetsController {
     return this.assets.get(id);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Post()
   create(@Body() dto: CreateAssetDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.assets.create(dto, actor, meta);
   }
 
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Patch(':id')
   update(
     @Param('id', ParseUuid) id: string,
@@ -49,7 +49,7 @@ export class AssetsController {
   }
 
   /** Hanya untuk aset tanpa riwayat alert; selain itu nonaktifkan lewat PATCH isActive=false. */
-  @Roles(Role.ADMIN)
+  @Roles(Role.ADMIN, Role.SUPERVISOR)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUuid) id: string, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {

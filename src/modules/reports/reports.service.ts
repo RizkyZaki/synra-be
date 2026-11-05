@@ -15,7 +15,7 @@ export interface DailyReport {
   date: string;
   timezone: string;
   generatedAt: Date;
-  scope: { bpd: string | null; component: string | null };
+  scope: { host: string | null; component: string | null };
   summary: {
     totalAssets: number;
     availabilityAvgPct: number | null;
@@ -26,7 +26,7 @@ export interface DailyReport {
   assets: {
     hostname: string;
     ipAddress: string;
-    bpd: string;
+    host: string;
     component: string;
     picName: string;
     cpuAvg: number | null;
@@ -40,7 +40,7 @@ export interface DailyReport {
   alerts: {
     code: string;
     hostname: string;
-    bpd: string;
+    host: string;
     problem: string;
     severity: Severity;
     status: string;
@@ -70,12 +70,12 @@ export class ReportsService {
     const to = new Date(Math.min(end.getTime(), Date.now()));
 
     const scopeWhere: Prisma.AssetWhereInput = {
-      ...(q.bpdId ? { bpdId: q.bpdId } : {}),
+      ...(q.hostId ? { hostId: q.hostId } : {}),
       ...(q.component ? { component: q.component } : {}),
     };
-    const [assets, bpd] = await Promise.all([
-      this.prisma.asset.findMany({ where: { ...scopeWhere, isActive: true }, include: { bpd: true }, orderBy: [{ bpd: { name: 'asc' } }, { hostname: 'asc' }] }),
-      q.bpdId ? this.prisma.bpd.findUnique({ where: { id: q.bpdId } }) : null,
+    const [assets, host] = await Promise.all([
+      this.prisma.asset.findMany({ where: { ...scopeWhere, isActive: true }, include: { host: true }, orderBy: [{ host: { name: 'asc' } }, { hostname: 'asc' }] }),
+      q.hostId ? this.prisma.host.findUnique({ where: { id: q.hostId } }) : null,
     ]);
     const ids = assets.map((a) => a.id);
 
@@ -98,7 +98,7 @@ export class ReportsService {
       }),
       this.prisma.alert.findMany({
         where: { asset: scopeWhere, detectedAt: { gte: start, lt: end } },
-        include: { asset: { include: { bpd: true } } },
+        include: { asset: { include: { host: true } } },
         orderBy: { detectedAt: 'asc' },
       }),
       this.prisma.alert.count({ where: { asset: scopeWhere, closedAt: { gte: start, lt: end } } }),
@@ -108,7 +108,7 @@ export class ReportsService {
     const assetRows = assets.map((a) => ({
       hostname: a.hostname,
       ipAddress: a.ipAddress,
-      bpd: a.bpd.name,
+      host: a.host.name,
       component: a.component,
       picName: a.picName,
       cpuAvg: nr(stat(a.id, MetricType.CPU)?.avg),
@@ -125,7 +125,7 @@ export class ReportsService {
       date,
       timezone: this.tz,
       generatedAt: new Date(),
-      scope: { bpd: bpd?.name ?? null, component: q.component ?? null },
+      scope: { host: host?.name ?? null, component: q.component ?? null },
       summary: {
         totalAssets: assets.length,
         availabilityAvgPct: measured.length ? round2(measured.reduce((s, r) => s + r.availabilityPct!, 0) / measured.length) : null,
@@ -139,7 +139,7 @@ export class ReportsService {
       alerts: detected.map((d) => ({
         code: alertCode(d.number),
         hostname: d.asset.hostname,
-        bpd: d.asset.bpd.name,
+        host: d.asset.host.name,
         problem: d.problem,
         severity: d.severity,
         status: d.status,
@@ -159,7 +159,7 @@ export class ReportsService {
       actorUsername: actor.username,
       entity: 'Report',
       entityId: `daily:${report.date}`,
-      after: { type: 'DAILY', date: report.date, format: q.format, bpd: report.scope.bpd, component: report.scope.component },
+      after: { type: 'DAILY', date: report.date, format: q.format, host: report.scope.host, component: report.scope.component },
       meta,
     });
     return {

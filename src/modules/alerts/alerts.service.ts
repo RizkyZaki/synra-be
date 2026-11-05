@@ -13,7 +13,7 @@ import { ALERT_STATUSES, ListAlertsQueryDto } from './dto/alert.dto';
 import { TRANSITIONS, TransitionName } from './alert-workflow';
 
 const alertInclude = {
-  asset: { select: { id: true, hostname: true, ipAddress: true, component: true, bpd: { select: { id: true, code: true, name: true } } } },
+  asset: { select: { id: true, hostname: true, ipAddress: true, component: true, host: { select: { id: true, code: true, name: true } } } },
 } satisfies Prisma.AlertInclude;
 
 type AlertWithAsset = Prisma.AlertGetPayload<{ include: typeof alertInclude }>;
@@ -146,7 +146,7 @@ export class AlertsService {
       metric: q.metric,
       assetId: q.assetId,
       asset: {
-        ...(q.bpdId ? { bpdId: q.bpdId } : {}),
+        ...(q.hostId ? { hostId: q.hostId } : {}),
         ...(q.component ? { component: q.component } : {}),
       },
       ...(q.from || q.to

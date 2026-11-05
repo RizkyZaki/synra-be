@@ -26,7 +26,7 @@ export class DashboardService {
     const views = await this.assets.listAll(scope);
     const countStatus = (s: AssetStatus) => views.filter((v) => v.status === s).length;
 
-    const alertWhere = { asset: { ...(scope.bpdId ? { bpdId: scope.bpdId } : {}), ...(scope.component ? { component: scope.component } : {}) } };
+    const alertWhere = { asset: { ...(scope.hostId ? { hostId: scope.hostId } : {}), ...(scope.component ? { component: scope.component } : {}) } };
     const [byStatus, openBySeverity, lastRun] = await Promise.all([
       this.prisma.alert.groupBy({ by: ['status'], where: alertWhere, _count: true }),
       this.prisma.alert.groupBy({ by: ['severity'], where: { ...alertWhere, status: { not: AlertStatus.CLOSED } }, _count: true }),
@@ -58,7 +58,7 @@ export class DashboardService {
       openAlertsBySeverity: openBySev,
       alertsByStatus: tally(Object.values(AlertStatus), byStatus, (r: { status: AlertStatus }) => r.status),
       assetsByComponent: group((v) => v.component),
-      assetsByBpd: group((v) => v.bpd.name),
+      assetsByHost: group((v) => v.host.name),
       lastIngestAt: lastRun?.finishedAt ?? null,
       lastIngestError: lastRun?.error ?? null,
     };
@@ -124,7 +124,7 @@ export class DashboardService {
 
   topAlerts(q: TopAlertsQueryDto) {
     return this.alerts.top(
-      { asset: { ...(q.bpdId ? { bpdId: q.bpdId } : {}), ...(q.component ? { component: q.component } : {}) } },
+      { asset: { ...(q.hostId ? { hostId: q.hostId } : {}), ...(q.component ? { component: q.component } : {}) } },
       q.limit,
     );
   }
@@ -133,7 +133,7 @@ export class DashboardService {
     const { from, to } = resolveRange(q);
     const assets = await this.prisma.asset.findMany({
       where: { ...this.scopeWhere(q), isActive: true },
-      include: { bpd: { select: { name: true } } },
+      include: { host: { select: { name: true } } },
       orderBy: { hostname: 'asc' },
     });
     const stats = await this.metrics.availability({
@@ -146,7 +146,7 @@ export class DashboardService {
     const rows = assets.map((a) => ({
       assetId: a.id,
       hostname: a.hostname,
-      bpd: a.bpd.name,
+      host: a.host.name,
       component: a.component,
       ...stats.get(a.id)!,
     }));
@@ -161,7 +161,7 @@ export class DashboardService {
   }
 
   private scopeWhere(scope: ScopeFilterDto) {
-    return { ...(scope.bpdId ? { bpdId: scope.bpdId } : {}), ...(scope.component ? { component: scope.component } : {}) };
+    return { ...(scope.hostId ? { hostId: scope.hostId } : {}), ...(scope.component ? { component: scope.component } : {}) };
   }
 
   private scopedAssets(scope: ScopeFilterDto) {
