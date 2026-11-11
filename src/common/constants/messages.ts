@@ -66,7 +66,13 @@ export const MSG = {
     `Status alert tidak dapat diubah dari ${from} ke ${to}.`,
   ALERT_STATUS_CHANGED: 'Status alert sudah diubah oleh pengguna lain. Muat ulang data.',
   ALERT_NOTE_REQUIRED: 'Catatan wajib diisi.',
-  ALERT_EVIDENCE_REQUIRED: 'Bukti remediasi wajib diisi sebelum review.',
+  ALERT_EVIDENCE_REQUIRED: 'Isi bukti remediasi atau lampirkan minimal satu file sebelum mengajukan review.',
+  ATTACHMENT_REQUIRED: 'Pilih minimal satu file.',
+  ATTACHMENT_TYPE: 'Jenis file tidak didukung. Gunakan PNG, JPG, WEBP, PDF, TXT, LOG, atau CSV.',
+  ATTACHMENT_CONTENT: (name: string) => `Isi file "${name}" tidak sesuai dengan jenisnya.`,
+  ATTACHMENT_LIMIT: (max: number) => `Maksimal ${max} lampiran per alert.`,
+  ATTACHMENT_CLOSED: 'Alert yang sudah ditutup tidak dapat ditambah lampiran.',
+  ATTACHMENT_NOT_FOUND: 'Lampiran tidak ditemukan.',
   EVALUATION_RUNNING: 'Evaluasi threshold sedang berjalan. Coba lagi beberapa saat lagi.',
 
   // Notifikasi

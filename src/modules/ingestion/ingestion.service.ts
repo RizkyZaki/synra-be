@@ -18,12 +18,14 @@ import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { MSG } from '../../common/constants/messages';
 import { paginate, PaginationQueryDto } from '../../common/dto/pagination.dto';
+import { BACKUP_DATASET, BACKUP_FIELDS, normalizeBackupDoc } from '../backups/backup-rules';
 import { METRICBEAT_FIELDS, NormalizedMetric, normalizeCsvRow, normalizeHostname, normalizeMetricbeatDoc } from './normalizer';
 
 const PAGE_SIZE = 5000;
 const INSERT_CHUNK = 5000;
 const ERROR_LEVELS = ['error', 'ERROR', 'Error', 'err', 'ERR', 'critical', 'CRITICAL', 'crit', 'fatal', 'FATAL', 'emerg', 'EMERG'];
 const CSV_MAX_ROWS = 50_000;
+const BACKUP_PAGE = 5000;
 
 interface SourceStats {
   docsRead: number;
@@ -100,8 +102,9 @@ export class IngestionService implements OnApplicationBootstrap, OnModuleDestroy
       const lastSeen = new Map<string, Date>();
       const mb = await this.ingestMetricbeat(hosts, unknown, lastSeen);
       const fb = await this.ingestFilebeat(hosts, unknown, lastSeen);
+      const bk = await this.ingestBackups(hosts, unknown);
       stats.docsRead = mb.docsRead + fb.docsRead;
-      stats.metricsSaved = mb.metricsSaved + fb.metricsSaved;
+      stats.metricsSaved = mb.metricsSaved + fb.metricsSaved + bk;
       await this.updateLastSeen(lastSeen);
       // Evaluasi hanya bila ES berhasil dibaca; bila ES gagal, semua host akan tampak stale secara keliru.
       evaluation = await this.engine.evaluate();
@@ -220,7 +223,15 @@ export class IngestionService implements OnApplicationBootstrap, OnModuleDestroy
             terms: { field: 'host.name', size: 2000 },
             aggs: {
               last_seen: { max: { field: '@timestamp' } },
-              errors: { filter: { terms: { 'log.level': ERROR_LEVELS } } },
+              // Log hasil backup dihitung terpisah (alert backup), bukan sebagai log error aplikasi.
+              errors: {
+                filter: {
+                  bool: {
+                    filter: [{ terms: { 'log.level': ERROR_LEVELS } }],
+                    must_not: [{ term: { 'event.dataset': BACKUP_DATASET } }],
+                  },
+                },
+              },
             },
           },
         },
@@ -247,6 +258,55 @@ export class IngestionService implements OnApplicationBootstrap, OnModuleDestroy
     stats.metricsSaved += await this.save(rows, hosts, unknown, new Map(), IngestSource.ELASTICSEARCH);
     await this.saveCursor(this.filebeatIndex, windowEnd);
     return stats;
+  }
+
+  /**
+   * Hasil backup: satu dokumen Filebeat per eksekusi job (event.dataset = "synra.backup").
+   * Hanya field synra.backup.* yang dibaca. Mengembalikan jumlah hasil backup baru.
+   */
+  private async ingestBackups(hosts: Map<string, string>, unknown: Set<string>): Promise<number> {
+    const key = `${this.filebeatIndex}#backup`;
+    const windowEnd = new Date();
+    const from = new Date((await this.cursor(key)).getTime() - this.overlapMs);
+    let res;
+    try {
+      res = await this.es.client.search({
+        index: this.filebeatIndex,
+        ignore_unavailable: true,
+        allow_no_indices: true,
+        size: BACKUP_PAGE,
+        _source: BACKUP_FIELDS,
+        query: {
+          bool: {
+            filter: [
+              { term: { 'event.dataset': BACKUP_DATASET } },
+              { range: { '@timestamp': { gte: from.toISOString(), lte: windowEnd.toISOString() } } },
+            ],
+          },
+        },
+        sort: [{ '@timestamp': 'asc' }],
+      });
+    } catch (e) {
+      if (isIndexMissing(e)) return 0;
+      throw e;
+    }
+
+    const docs = res.hits.hits.map((h) => normalizeBackupDoc(h._source)).filter((d) => d !== null);
+    const data: Prisma.BackupRunCreateManyInput[] = [];
+    for (const d of docs) {
+      const assetId = hosts.get(d.hostname);
+      if (!assetId) {
+        unknown.add(d.hostname);
+        continue;
+      }
+      const { hostname: _h, ...run } = d;
+      data.push({ assetId, ...run });
+    }
+    const inserted = data.length ? (await this.prisma.backupRun.createMany({ data, skipDuplicates: true })).count : 0;
+    // Bila halaman penuh, lanjutkan dari dokumen terakhir pada run berikutnya.
+    const full = res.hits.hits.length === BACKUP_PAGE && docs.length > 0;
+    await this.saveCursor(key, full ? docs[docs.length - 1].finishedAt : windowEnd);
+    return inserted;
   }
 
   // ---------------------------------------------------------------- CSV

@@ -63,10 +63,14 @@ export class AlertsService {
         ...alertInclude,
         events: { orderBy: { createdAt: 'asc' } },
         notifications: { orderBy: { createdAt: 'desc' }, select: { id: true, event: true, status: true, error: true, createdAt: true } },
+        attachments: {
+          orderBy: { createdAt: 'asc' },
+          select: { id: true, fileName: true, mimeType: true, sizeBytes: true, sha256: true, uploadedByName: true, createdAt: true },
+        },
       },
     });
     if (!alert) throw new NotFoundException(MSG.ALERT_NOT_FOUND);
-    return { ...toView(alert), events: alert.events, notifications: alert.notifications };
+    return { ...toView(alert), events: alert.events, notifications: alert.notifications, attachments: alert.attachments };
   }
 
   async transition(
@@ -80,7 +84,9 @@ export class AlertsService {
     const note = input.note?.trim() || null;
     const evidence = input.evidence?.trim() || null;
     if (rule.noteRequired && !note) throw new BadRequestException(MSG.ALERT_NOTE_REQUIRED);
-    if (rule.evidenceRequired && !evidence) throw new BadRequestException(MSG.ALERT_EVIDENCE_REQUIRED);
+    if (rule.evidenceRequired && !evidence && (await this.prisma.alertAttachment.count({ where: { alertId: id } })) === 0) {
+      throw new BadRequestException(MSG.ALERT_EVIDENCE_REQUIRED);
+    }
 
     const current = await this.prisma.alert.findUnique({ where: { id } });
     if (!current) throw new NotFoundException(MSG.ALERT_NOT_FOUND);
@@ -189,5 +195,7 @@ export function toView(a: AlertWithAsset & Partial<Alert>) {
     acknowledgedAt: a.acknowledgedAt,
     closedAt: a.closedAt,
     closeNote: a.closeNote,
+    escalationLevel: a.escalationLevel ?? 0,
+    lastEscalatedAt: a.lastEscalatedAt ?? null,
   };
 }

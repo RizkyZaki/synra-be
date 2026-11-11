@@ -21,8 +21,10 @@ export class TelegramService {
     return Boolean(this.token && this.chatId);
   }
 
-  async send(html: string): Promise<SendResult> {
-    if (!this.configured) {
+  /** chatId opsional untuk mengirim ke chat lain selain grup utama (mis. chat tingkat eskalasi). */
+  async send(html: string, chatId?: string | null): Promise<SendResult> {
+    const target = chatId || this.chatId;
+    if (!this.token || !target) {
       return { ok: false, skipped: true, error: 'Telegram belum dikonfigurasi' };
     }
     let lastError = '';
@@ -32,7 +34,7 @@ export class TelegramService {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: this.chatId,
+            chat_id: target,
             text: html,
             parse_mode: 'HTML',
             disable_web_page_preview: true,

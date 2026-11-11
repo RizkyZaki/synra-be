@@ -5,6 +5,8 @@ import { MetricsRepository } from '../metrics/metrics.repository';
 import { ThresholdsService } from '../thresholds/thresholds.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AuditService } from '../audit/audit.service';
+import { BackupsService } from '../backups/backups.service';
+import { backupAgeHours } from '../backups/backup-rules';
 import { evaluateAsset, minutesSinceSeen, staleLimitMinutes } from '../thresholds/threshold-evaluator';
 import { dedupKey, planAlertChanges } from './alert-workflow';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
@@ -34,6 +36,7 @@ export class AlertsEngineService {
     private readonly thresholds: ThresholdsService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
+    private readonly backups: BackupsService,
   ) {}
 
   /** Dipanggil dari tombol "Evaluasi EWS" (ADMIN). */
@@ -68,6 +71,12 @@ export class AlertsEngineService {
     const rules = await this.thresholds.rulesByMetric();
     const assets = await this.prisma.asset.findMany();
     const snapshots = await this.metrics.latestSnapshots(assets.map((a) => a.id));
+    const backupsByAsset = new Map<string, { jobName: string; consecutiveFailures: number; ageHours: number; lastMessage: string | null }[]>();
+    for (const j of await this.backups.jobStates(assets.map((a) => a.id))) {
+      const list = backupsByAsset.get(j.assetId) ?? [];
+      list.push({ jobName: j.jobName, consecutiveFailures: j.consecutiveFailures, ageHours: backupAgeHours(j, now), lastMessage: j.lastMessage });
+      backupsByAsset.set(j.assetId, list);
+    }
 
     // 1. Status stale
     const limit = staleLimitMinutes(rules);
@@ -80,7 +89,7 @@ export class AlertsEngineService {
     // 2. Temuan threshold
     const findings = assets.flatMap((a) => {
       const s = snapshots.get(a.id)!;
-      return evaluateAsset({ ...a, cpu: s.cpu, memory: s.memory, disks: s.disks }, rules, now);
+      return evaluateAsset({ ...a, cpu: s.cpu, memory: s.memory, disks: s.disks, backups: backupsByAsset.get(a.id) }, rules, now);
     });
 
     // 3. Deduplikasi terhadap alert yang belum CLOSED

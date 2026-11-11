@@ -10,6 +10,16 @@ export interface EvaluatedAsset {
   cpu: number | null;
   memory: number | null;
   disks: { mountPoint: string; value: number }[];
+  /** Keadaan job backup aset ini (kosong bila aset tidak punya job backup) */
+  backups?: EvaluatedBackupJob[];
+}
+
+export interface EvaluatedBackupJob {
+  jobName: string;
+  consecutiveFailures: number;
+  /** Jam sejak backup sukses terakhir */
+  ageHours: number;
+  lastMessage: string | null;
 }
 
 export interface Finding {
@@ -79,6 +89,21 @@ export function evaluateAsset(asset: EvaluatedAsset, rules: RulesByMetric, now: 
   }
   for (const d of asset.disks) {
     push(RuleMetric.DISK, d.mountPoint, d.value, (t) => `Disk ${d.mountPoint} terpakai ${fmt(d.value)}% (batas ${fmt(t)}%)`);
+  }
+  for (const b of asset.backups ?? []) {
+    const before = findings.length;
+    if (b.consecutiveFailures > 0) {
+      push(RuleMetric.BACKUP_FAILED, b.jobName, b.consecutiveFailures, () =>
+        `Backup "${b.jobName}" gagal ${b.consecutiveFailures} kali beruntun${b.lastMessage ? `: ${b.lastMessage}` : ''}`,
+      );
+    }
+    // Bila sudah ada temuan "gagal" untuk job ini, temuan umur tidak ditambahkan agar tidak dobel.
+    if (findings.length === before) {
+      const hours = Math.floor(b.ageHours);
+      push(RuleMetric.BACKUP_AGE, b.jobName, hours, (t) =>
+        `Tidak ada backup "${b.jobName}" yang berhasil selama ${hours} jam (batas ${fmt(t)} jam)`,
+      );
+    }
   }
   return findings;
 }

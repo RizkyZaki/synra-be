@@ -49,6 +49,7 @@ enum AlertAction {
   RETURNED
   CLOSED
   SEVERITY_RAISED
+  ESCALATED
 }
 
 enum ThresholdOperator {
@@ -61,6 +62,10 @@ enum RuleMetric {
   MEMORY
   DISK
   HOST_STALE
+  /// Jumlah kegagalan beruntun satu job backup
+  BACKUP_FAILED
+  /// Jam sejak backup terakhir yang berhasil untuk satu job
+  BACKUP_AGE
 }
 
 enum IngestSource {
@@ -106,6 +111,13 @@ enum AuditAction {
   LIFECYCLE_DELETE
   RENEWAL_REQUEST
   RENEWAL_DECIDE
+  ESCALATION_UPDATE
+  ALERT_ATTACHMENT_UPLOAD
+}
+
+enum BackupStatus {
+  SUCCESS
+  FAILED
 }
 
 model User {
@@ -153,6 +165,7 @@ model Asset {
   isStale            Boolean        @default(false)
   metrics            Metric[]
   alerts             Alert[]
+  backupRuns         BackupRun[]
   /// id pelaku disimpan tanpa FK, seperti actorId pada AlertEvent dan AuditLog
   userInputId        String?
   dtimeInput         DateTime       @default(now())
@@ -245,8 +258,12 @@ model Alert {
   closedAt         DateTime?
   closedById       String?
   closeNote        String?
+  /// Tingkat eskalasi terakhir yang sudah dikirim (0 = belum dieskalasi)
+  escalationLevel  Int               @default(0)
+  lastEscalatedAt  DateTime?
   events           AlertEvent[]
   notifications    NotificationLog[]
+  attachments      AlertAttachment[]
 
   @@index([status, severity])
   @@index([assetId, metric, label, status])
@@ -367,4 +384,78 @@ model RenewalRequest {
   createdAt       DateTime      @default(now())
 
   @@index([itemId, status])
+}
+
+/// Hasil satu eksekusi job backup, dibaca dari Filebeat (event.dataset = "synra.backup").
+model BackupRun {
+  id          String       @id @default(uuid())
+  assetId     String
+  asset       Asset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  /// Nama job, mis. "db-full" atau "config-snapshot"
+  jobName     String
+  /// FULL, INCREMENTAL, DIFFERENTIAL, SNAPSHOT, LOG
+  type        String       @default("FULL")
+  status      BackupStatus
+  startedAt   DateTime?
+  finishedAt  DateTime
+  sizeBytes   BigInt?
+  durationSec Int?
+  /// Tujuan penyimpanan, mis. "nas-dc1" atau "s3://bucket"
+  target      String?
+  /// Pesan singkat dari skrip backup (khusus kegagalan)
+  message     String?
+  createdAt   DateTime     @default(now())
+
+  @@unique([assetId, jobName, finishedAt])
+  @@index([assetId, jobName, finishedAt])
+  @@index([finishedAt])
+}
+
+/// Kebijakan SLA dan eskalasi per severity.
+model EscalationPolicy {
+  severity       Severity         @id
+  /// Batas waktu alert harus diakui (menit sejak terdeteksi)
+  ackMinutes     Int
+  /// Batas waktu alert harus ditutup (menit sejak terdeteksi)
+  resolveMinutes Int
+  enabled        Boolean          @default(true)
+  steps          EscalationStep[]
+  updatedById    String?
+  updatedAt      DateTime         @updatedAt
+}
+
+/// Satu tingkat eskalasi: bila alert belum ditutup setelah afterMinutes, kirim ke target ini.
+model EscalationStep {
+  id             String           @id @default(uuid())
+  severity       Severity
+  policy         EscalationPolicy @relation(fields: [severity], references: [severity], onDelete: Cascade)
+  level          Int
+  afterMinutes   Int
+  /// Jabatan atau tim tujuan, mis. "Supervisor NOC"
+  targetLabel    String
+  /// Mention Telegram, mis. "@budi_noc" (opsional)
+  mention        String?
+  /// Chat Telegram tambahan untuk tingkat ini; kosong = grup utama
+  telegramChatId String?
+
+  @@unique([severity, level])
+}
+
+/// Lampiran bukti remediasi (screenshot, log, PDF). Tidak bisa dihapus agar bukti tetap utuh.
+model AlertAttachment {
+  id             String   @id @default(uuid())
+  alertId        String
+  alert          Alert    @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  fileName       String
+  mimeType       String
+  sizeBytes      Int
+  /// Nama file di direktori UPLOAD_DIR (acak, bukan nama asli)
+  storageKey     String   @unique
+  /// Hash isi file untuk membuktikan file tidak berubah
+  sha256         String
+  uploadedById   String?
+  uploadedByName String
+  createdAt      DateTime @default(now())
+
+  @@index([alertId])
 }

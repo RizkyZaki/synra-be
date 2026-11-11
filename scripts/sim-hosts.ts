@@ -21,6 +21,11 @@ export interface SimAsset {
   mounts: string[];
   /** Aset yang sengaja tidak didaftarkan di seed (untuk menguji "unknown hosts") */
   unregistered?: boolean;
+  /**
+   * Skenario backup: "failing" = job utama gagal beberapa kali terakhir, "none" = tidak punya job
+   * backup (muncul sebagai aset tanpa backup). Default: semua job berhasil.
+   */
+  backup?: 'failing' | 'none';
 }
 
 export const SIM_HOSTS: SimHost[] = [
@@ -34,10 +39,10 @@ export const SIM_ASSETS: SimAsset[] = [
   { hostname: 'cbs-app-jtg-01', ip: '10.10.1.11', host: 'BPD-JTG', component: 'CORE_BANKING', pic: 'Tim Infrastruktur', scenario: 'normal', mounts: ['/', '/data'] },
   { hostname: 'cbs-db-jtg-01', ip: '10.10.1.21', host: 'BPD-JTG', component: 'DATABASE', pic: 'Tim DBA', scenario: 'disk-full', mounts: ['/', '/data'] },
   { hostname: 'cbs-app-jtm-01', ip: '10.20.1.11', host: 'BPD-JTM', component: 'CORE_BANKING', pic: 'Tim Infrastruktur', scenario: 'cpu-high', mounts: ['/', '/data'] },
-  { hostname: 'cbs-db-jtm-01', ip: '10.20.1.21', host: 'BPD-JTM', component: 'DATABASE', pic: 'Tim DBA', scenario: 'normal', mounts: ['/', '/data'] },
-  { hostname: 'web-ib-bali-01', ip: '10.30.1.31', host: 'BPD-BALI', component: 'WEB', pic: 'Tim Aplikasi', scenario: 'memory-high', mounts: ['/'] },
+  { hostname: 'cbs-db-jtm-01', ip: '10.20.1.21', host: 'BPD-JTM', component: 'DATABASE', pic: 'Tim DBA', scenario: 'normal', mounts: ['/', '/data'], backup: 'failing' },
+  { hostname: 'web-ib-bali-01', ip: '10.30.1.31', host: 'BPD-BALI', component: 'WEB', pic: 'Tim Aplikasi', scenario: 'memory-high', mounts: ['/'], backup: 'none' },
   { hostname: 'cbs-app-bali-01', ip: '10.30.1.11', host: 'BPD-BALI', component: 'CORE_BANKING', pic: 'Tim Infrastruktur', scenario: 'host-down', mounts: ['/', '/data'] },
-  { hostname: 'mw-esb-sumut-01', ip: '10.40.1.41', host: 'BPD-SUMUT', component: 'MIDDLEWARE', pic: 'Tim Middleware', scenario: 'disk-warning', mounts: ['/', '/opt'] },
+  { hostname: 'mw-esb-sumut-01', ip: '10.40.1.41', host: 'BPD-SUMUT', component: 'MIDDLEWARE', pic: 'Tim Middleware', scenario: 'disk-warning', mounts: ['/', '/opt'], backup: 'failing' },
   { hostname: 'cbs-app-sumut-01', ip: '10.40.1.11', host: 'BPD-SUMUT', component: 'CORE_BANKING', pic: 'Tim Infrastruktur', scenario: 'error-logs', mounts: ['/', '/data'] },
   { hostname: 'test-unregistered-01', ip: '10.99.0.1', host: 'BPD-JTG', component: 'WEB', pic: '-', scenario: 'normal', mounts: ['/'], unregistered: true },
 ];

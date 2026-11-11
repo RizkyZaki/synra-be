@@ -27,6 +27,7 @@ const TITLE: Record<AlertAction, string> = {
   RETURNED: 'Alert dikembalikan ke penanganan',
   CLOSED: 'Alert ditutup',
   SEVERITY_RAISED: 'Severity alert naik',
+  ESCALATED: 'ESKALASI',
 };
 
 export const alertCode = (n: number) => `ALT-${String(n).padStart(3, '0')}`;
@@ -39,11 +40,19 @@ export function formatJakarta(d: Date, timeZone = 'Asia/Jakarta'): string {
   return d.toLocaleString('id-ID', { timeZone, dateStyle: 'medium', timeStyle: 'short' }) + ' WIB';
 }
 
+export interface AlertMessageContext {
+  actor?: string;
+  note?: string | null;
+  /** Khusus eskalasi */
+  status?: string;
+  mention?: string | null;
+}
+
 /** Menyusun pesan Telegram (HTML) untuk satu peristiwa alert. */
 export function buildAlertMessage(
   alert: AlertMessageInput,
   event: AlertAction,
-  ctx: { actor?: string; note?: string | null } = {},
+  ctx: AlertMessageContext = {},
 ): string {
   const e = escapeHtml;
   const lines = [
@@ -60,6 +69,13 @@ export function buildAlertMessage(
       `<b>Waktu deteksi:</b> ${formatJakarta(alert.detectedAt)}`,
       `<b>Rekomendasi:</b> ${e(alert.recommendation)}`,
     );
+  } else if (event === AlertAction.ESCALATED) {
+    lines.push(
+      `<b>Status:</b> ${e(ctx.status ?? '-')} · <b>PIC:</b> ${e(alert.picName)}`,
+      `<b>Terdeteksi:</b> ${formatJakarta(alert.detectedAt)}`,
+    );
+    if (ctx.note) lines.push(`<b>Eskalasi:</b> ${e(ctx.note)}`);
+    if (ctx.mention) lines.push(e(ctx.mention));
   } else {
     if (ctx.actor) lines.push(`<b>Oleh:</b> ${e(ctx.actor)}`);
     if (ctx.note) lines.push(`<b>Catatan:</b> ${e(ctx.note)}`);

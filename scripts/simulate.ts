@@ -6,6 +6,8 @@
  *   npm run simulate -- --no-live          # backfill saja lalu keluar
  *   npm run simulate -- --reset            # hapus index simulasi dulu
  *
+ * Juga mengirim log hasil backup (event.dataset = "synra.backup") ke index filebeat-sim-*.
+ *
  * Menulis ke index metricbeat-sim-YYYY.MM.DD dan filebeat-sim-YYYY.MM.DD (cocok dengan pola
  * metricbeat-* / filebeat-* yang dibaca backend). Jangan arahkan ke Elasticsearch produksi.
  */
@@ -107,6 +109,82 @@ function filebeatDocs(host: SimAsset, t: number): object[] {
   }));
 }
 
+// ------------------------------------------------------------------ backup
+
+interface BackupJob {
+  name: string;
+  type: string;
+  everyMs: number;
+  /** Ukuran rata-rata dalam GB */
+  sizeGb: number;
+  target: string;
+}
+
+const HOUR = 3_600_000;
+
+/** Job backup per aset: database punya full harian + archive log per jam, lainnya snapshot konfigurasi. */
+function backupJobs(host: SimAsset): BackupJob[] {
+  if (host.backup === 'none') return [];
+  if (host.component === 'DATABASE') {
+    return [
+      { name: 'db-full', type: 'FULL', everyMs: 24 * HOUR, sizeGb: 180, target: 'nas-dc1:/backup/db' },
+      { name: 'db-archivelog', type: 'LOG', everyMs: HOUR, sizeGb: 2.5, target: 'nas-dc1:/backup/arch' },
+    ];
+  }
+  return [{ name: 'config-snapshot', type: 'SNAPSHOT', everyMs: 6 * HOUR, sizeGb: 0.4, target: 'nas-dc1:/backup/config' }];
+}
+
+/** Job yang gagal pada skenario "failing" dan sejak kapan gagalnya. */
+function isFailing(host: SimAsset, job: BackupJob, t: number): string | null {
+  if (host.backup !== 'failing') return null;
+  if (job.name === 'db-archivelog' && Date.now() - t < 4 * HOUR) return 'No space left on device: /backup/arch';
+  if (job.name === 'config-snapshot' && Date.now() - t < 6 * HOUR) return 'Koneksi ke nas-dc1 timeout setelah 30 detik';
+  return null;
+}
+
+function backupDoc(host: SimAsset, job: BackupJob, t: number): object {
+  const error = isFailing(host, job, t);
+  const seed = [...(host.hostname + job.name)].reduce((sum, c) => sum + c.charCodeAt(0), 0);
+  const duration = Math.round(job.sizeGb * 20 + (seed % 60));
+  const size = Math.round(job.sizeGb * (0.95 + ((t / HOUR + seed) % 10) / 100) * 1024 ** 3);
+  return {
+    '@timestamp': new Date(t).toISOString(),
+    host: { name: host.hostname },
+    agent: { type: 'filebeat', version: '8.15.3' },
+    event: { dataset: 'synra.backup' },
+    log: { level: error ? 'error' : 'info' },
+    message: `backup ${job.name} ${error ? 'FAILED' : 'SUCCESS'}`,
+    synra: {
+      backup: {
+        job: job.name,
+        type: job.type,
+        status: error ? 'failed' : 'success',
+        started_at: new Date(t - duration * 1000).toISOString(),
+        size_bytes: error ? 0 : size,
+        duration_s: duration,
+        target: job.target,
+        ...(error ? { message: error } : {}),
+      },
+    },
+  };
+}
+
+/** Dokumen backup untuk semua jadwal job yang jatuh di (from, to]. Jadwal digeser 5 menit dari jam bulat. */
+function backupDocsBetween(from: number, to: number) {
+  const offset = 5 * 60_000;
+  const docs: { index: string; doc: object }[] = [];
+  for (const host of SIM_ASSETS) {
+    for (const job of backupJobs(host)) {
+      for (let k = Math.floor((from - offset) / job.everyMs) + 1; k * job.everyMs + offset <= to; k++) {
+        const t = k * job.everyMs + offset;
+        if (t <= from || !isSending(host, t)) continue;
+        docs.push({ index: `filebeat-sim-${day(t)}`, doc: backupDoc(host, job, t) });
+      }
+    }
+  }
+  return docs;
+}
+
 // ------------------------------------------------------------------ ES
 
 async function ensureTemplates() {
@@ -142,7 +220,29 @@ async function ensureTemplates() {
     index_patterns: ['filebeat-sim-*'],
     template: {
       settings: { number_of_replicas: 0 },
-      mappings: { properties: { ...common, log: { properties: { level: { type: 'keyword' } } }, message: { type: 'text' } } },
+      mappings: {
+        properties: {
+          ...common,
+          log: { properties: { level: { type: 'keyword' } } },
+          message: { type: 'text' },
+          synra: {
+            properties: {
+              backup: {
+                properties: {
+                  job: { type: 'keyword' },
+                  type: { type: 'keyword' },
+                  status: { type: 'keyword' },
+                  started_at: { type: 'date' },
+                  size_bytes: { type: 'long' },
+                  duration_s: { type: 'long' },
+                  target: { type: 'keyword' },
+                  message: { type: 'keyword' },
+                },
+              },
+            },
+          },
+        },
+      },
     },
   });
 }
@@ -197,17 +297,22 @@ async function main() {
       process.stdout.write(`\r- Backfill ${HOURS} jam: ${total} dokumen`);
     }
   }
+  batch.push(...backupDocsBetween(start, now));
   await bulk(batch);
   total += batch.length;
   await es.indices.refresh({ index: 'metricbeat-sim-*,filebeat-sim-*', ignore_unavailable: true });
   console.log(`\r- Backfill ${HOURS} jam selesai: ${total} dokumen.`);
   console.log('- Skenario: ' + SIM_ASSETS.map((h) => `${h.hostname}=${h.scenario}${h.unregistered ? ' (tidak terdaftar)' : ''}`).join(', '));
+  console.log('- Backup: ' + SIM_ASSETS.filter((h) => h.backup).map((h) => `${h.hostname}=${h.backup}`).join(', ') + ', lainnya berhasil.');
 
   if (!LIVE) return;
   console.log(`- Mode live: kirim data tiap ${LIVE_STEP_SEC} detik. Tekan Ctrl+C untuk berhenti.`);
+  let lastTick = now;
   const tick = async () => {
     try {
-      const docs = docsAt(Date.now());
+      const t = Date.now();
+      const docs = [...docsAt(t), ...backupDocsBetween(lastTick, t)];
+      lastTick = t;
       await bulk(docs);
       process.stdout.write(`\r- Live: ${new Date().toLocaleTimeString('id-ID')} +${docs.length} dokumen   `);
     } catch (e) {

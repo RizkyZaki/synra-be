@@ -1,8 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { AlertsService } from './alerts.service';
 import { AlertsEngineService } from './alerts-engine.service';
+import {
+  AlertAttachmentsService,
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_MAX_FILES_PER_UPLOAD,
+  isAllowedAttachment,
+} from './alert-attachments.service';
+import { MSG } from '../../common/constants/messages';
 import { AlertNoteDto, AlertRequiredNoteDto, ListAlertsQueryDto, SubmitReviewDto } from './dto/alert.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -16,6 +24,7 @@ export class AlertsController {
   constructor(
     private readonly alerts: AlertsService,
     private readonly engine: AlertsEngineService,
+    private readonly attachments: AlertAttachmentsService,
   ) {}
 
   /** Daftar alert. Filter: status (koma / "open"), severity, metric, aset, Host, komponen, rentang waktu deteksi. */
@@ -28,6 +37,36 @@ export class AlertsController {
   @Get(':id')
   get(@Param('id', ParseUuid) id: string) {
     return this.alerts.get(id);
+  }
+
+  /**
+   * Unggah lampiran bukti remediasi (field "files", maks. 5 file @ 10 MB per unggahan).
+   * Jenis: PNG, JPG, WEBP, PDF, TXT, LOG, CSV. Lampiran tidak bisa dihapus.
+   */
+  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
+  @Post(':id/attachments')
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { files: { type: 'array', items: { type: 'string', format: 'binary' } } } } })
+  @UseInterceptors(
+    FilesInterceptor('files', ATTACHMENT_MAX_FILES_PER_UPLOAD, {
+      limits: { fileSize: ATTACHMENT_MAX_BYTES },
+      fileFilter: (_req, file, cb) =>
+        isAllowedAttachment(file.originalname) ? cb(null, true) : cb(new BadRequestException(MSG.ATTACHMENT_TYPE), false),
+    }),
+  )
+  uploadAttachments(
+    @Param('id', ParseUuid) id: string,
+    @UploadedFiles() files: Express.Multer.File[] | undefined,
+    @CurrentUser() actor: AuthUser,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.attachments.upload(id, files, actor, meta);
+  }
+
+  /** Unduh satu lampiran. Gambar dan PDF dikirim inline, file teks sebagai unduhan. */
+  @Get(':id/attachments/:attachmentId')
+  downloadAttachment(@Param('id', ParseUuid) id: string, @Param('attachmentId', ParseUuid) attachmentId: string) {
+    return this.attachments.download(id, attachmentId);
   }
 
   /** Menjalankan evaluasi threshold sekarang (tombol "Evaluasi EWS"). */

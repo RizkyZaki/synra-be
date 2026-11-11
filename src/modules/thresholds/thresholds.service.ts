@@ -19,16 +19,22 @@ export class ThresholdsService implements OnModuleInit {
     private readonly audit: AuditService,
   ) {}
 
-  /** Mengisi aturan default bila tabel masih kosong, agar evaluasi langsung berjalan. */
+  /**
+   * Mengisi aturan default untuk metrik yang belum punya aturan sama sekali (instalasi baru,
+   * atau metrik baru setelah upgrade). Admin tidak bisa mengosongkan aturan satu metrik,
+   * jadi metrik yang sudah diatur tidak akan ditimpa.
+   */
   async onModuleInit() {
-    if ((await this.prisma.thresholdRule.count()) > 0) return;
+    const existing = new Set((await this.prisma.thresholdRule.findMany({ select: { metric: true } })).map((r) => r.metric));
+    const missing = DEFAULT_RULES.filter((r) => !existing.has(r.metric));
+    if (missing.length === 0) return;
     await this.prisma.thresholdRule.createMany({
-      data: DEFAULT_RULES.flatMap((r) =>
+      data: missing.flatMap((r) =>
         r.levels.map((l) => ({ metric: r.metric, ...l, recommendation: DEFAULT_RECOMMENDATION[r.metric] })),
       ),
       skipDuplicates: true,
     });
-    this.logger.log('Aturan threshold default dibuat.');
+    this.logger.log(`Aturan threshold default dibuat untuk: ${missing.map((r) => r.metric).join(', ')}.`);
   }
 
   async list() {

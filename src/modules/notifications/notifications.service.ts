@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AlertAction, NotifStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TelegramService } from './telegram.service';
-import { buildAlertMessage, formatJakarta } from './alert-message';
+import { AlertMessageContext, buildAlertMessage, formatJakarta } from './alert-message';
 import { MSG } from '../../common/constants/messages';
 import { paginate, PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -19,20 +19,20 @@ export class NotificationsService {
    * Mengirim notifikasi alert tanpa memblokir pemanggil. Kegagalan kirim hanya dicatat
    * di NotificationLog dan tidak pernah membatalkan perubahan status alert.
    */
-  notifyAlert(alertId: string, event: AlertAction, ctx: { actor?: string; note?: string | null } = {}): void {
+  notifyAlert(alertId: string, event: AlertAction, ctx: AlertMessageContext & { chatId?: string | null } = {}): void {
     void this.deliver(alertId, event, ctx).catch((e) =>
       this.logger.error(`Notifikasi alert ${alertId} gagal diproses: ${(e as Error).message}`),
     );
   }
 
-  private async deliver(alertId: string, event: AlertAction, ctx: { actor?: string; note?: string | null }) {
+  private async deliver(alertId: string, event: AlertAction, ctx: AlertMessageContext & { chatId?: string | null }) {
     const alert = await this.prisma.alert.findUnique({
       where: { id: alertId },
       include: { asset: { include: { host: true } } },
     });
     if (!alert) return;
     const message = buildAlertMessage(alert, event, ctx);
-    const result = await this.telegram.send(message);
+    const result = await this.telegram.send(message, ctx.chatId);
     await this.prisma.notificationLog.create({
       data: {
         alertId,

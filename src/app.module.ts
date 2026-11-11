@@ -18,6 +18,9 @@ import { IngestionModule } from './modules/ingestion/ingestion.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { LifecycleModule } from './modules/lifecycle/lifecycle.module';
+import { BackupsModule } from './modules/backups/backups.module';
+import { EscalationModule } from './modules/escalation/escalation.module';
+import { SecurityModule } from './modules/security/security.module';
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -42,6 +45,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     DashboardModule,
     ReportsModule,
     LifecycleModule,
+    BackupsModule,
+    EscalationModule,
+    SecurityModule,
   ],
   controllers: [HealthController],
   providers: [

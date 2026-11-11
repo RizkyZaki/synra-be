@@ -17,6 +17,8 @@ export const METRIC_UNIT: Record<RuleMetric, string> = {
   MEMORY: '%',
   DISK: '%',
   HOST_STALE: 'menit',
+  BACKUP_FAILED: 'kali',
+  BACKUP_AGE: 'jam',
 };
 
 export const DEFAULT_RECOMMENDATION: Record<RuleMetric, string> = {
@@ -24,6 +26,8 @@ export const DEFAULT_RECOMMENDATION: Record<RuleMetric, string> = {
   MEMORY: 'Periksa proses dengan pemakaian memori terbesar, indikasi memory leak, dan konfigurasi heap aplikasi.',
   DISK: 'Bersihkan log/arsip lama, cari file besar (du -sh), dan rencanakan penambahan kapasitas disk.',
   HOST_STALE: 'Periksa apakah server menyala, koneksi jaringan ke Elasticsearch, serta status layanan Metricbeat/Filebeat di host.',
+  BACKUP_FAILED: 'Baca pesan error job backup, cek ruang kosong dan koneksi ke tujuan backup, lalu jalankan ulang job secara manual.',
+  BACKUP_AGE: 'Pastikan jadwal job backup (cron/scheduler) masih aktif dan Filebeat mengirim log backup, lalu jalankan backup manual.',
 };
 
 /** Nilai default sesuai spesifikasi. "Warning" pada disk dipetakan ke severity LOW. */
@@ -40,6 +44,20 @@ export const DEFAULT_RULES: { metric: RuleMetric; levels: Omit<RuleLevel, 'recom
     ],
   },
   { metric: RuleMetric.HOST_STALE, levels: [{ severity: Severity.CRITICAL, operator: ThresholdOperator.GT, value: 5, enabled: true }] },
+  {
+    metric: RuleMetric.BACKUP_FAILED,
+    levels: [
+      { severity: Severity.HIGH, operator: ThresholdOperator.GTE, value: 1, enabled: true },
+      { severity: Severity.CRITICAL, operator: ThresholdOperator.GTE, value: 3, enabled: true },
+    ],
+  },
+  {
+    metric: RuleMetric.BACKUP_AGE,
+    levels: [
+      { severity: Severity.MEDIUM, operator: ThresholdOperator.GT, value: 26, enabled: true },
+      { severity: Severity.CRITICAL, operator: ThresholdOperator.GT, value: 50, enabled: true },
+    ],
+  },
 ];
 
 /**
@@ -59,6 +77,12 @@ export function validateLevels(metric: RuleMetric, levels: RuleLevel[]): string 
     }
     if (metric === RuleMetric.HOST_STALE && (l.value < 1 || l.value > 1440)) {
       return 'Nilai threshold host stale harus di antara 1 dan 1440 menit.';
+    }
+    if (metric === RuleMetric.BACKUP_FAILED && (l.value < 1 || l.value > 100)) {
+      return 'Nilai threshold backup gagal harus di antara 1 dan 100 kali beruntun.';
+    }
+    if (metric === RuleMetric.BACKUP_AGE && (l.value < 1 || l.value > 720)) {
+      return 'Nilai threshold umur backup harus di antara 1 dan 720 jam.';
     }
   }
 

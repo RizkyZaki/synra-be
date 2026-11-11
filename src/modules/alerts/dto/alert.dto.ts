@@ -77,12 +77,15 @@ export class AlertRequiredNoteDto {
 }
 
 export class SubmitReviewDto extends AlertRequiredNoteDto {
-  /** Referensi tiket, log, atau bukti validasi */
+  /**
+   * Referensi tiket, log, atau bukti validasi. Boleh kosong bila sudah ada lampiran
+   * (POST /alerts/:id/attachments); salah satu wajib ada.
+   */
+  @IsOptional()
   @Transform(trim)
   @IsString({ message: 'Bukti remediasi harus berupa teks.' })
-  @IsNotEmpty({ message: 'Bukti remediasi wajib diisi sebelum review.' })
   @MaxLength(1000, { message: 'Bukti remediasi maksimal 1000 karakter.' })
-  evidence: string;
+  evidence?: string;
 }
 
 export const ALERT_STATUSES = Object.values(AlertStatus);

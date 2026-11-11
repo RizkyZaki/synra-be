@@ -87,6 +87,10 @@ export class EnvironmentVariables {
   @IsString()
   FILEBEAT_INDEX = 'filebeat-*';
 
+  // ---------- Lampiran bukti remediasi ----------
+  @IsString()
+  UPLOAD_DIR = './uploads';
+
   // ---------- Ingestion ----------
   @Transform(toBool)
   @IsBoolean()
