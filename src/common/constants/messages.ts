@@ -33,6 +33,14 @@ export const MSG = {
   HOST_CODE_TAKEN: 'Kode Host sudah digunakan.',
   HOST_HAS_ASSETS: 'Host tidak dapat dihapus karena masih memiliki aset.',
   SUPERVISOR_INVALID: 'Supervisor harus user aktif dengan role SUPERVISOR.',
+  // Siklus hidup
+  LIFECYCLE_NOT_FOUND: 'Item siklus hidup tidak ditemukan.',
+  LIFECYCLE_QUOTA: 'Jumlah terpakai tidak boleh melebihi kuota.',
+  RENEWAL_NOT_FOUND: 'Pengajuan perpanjangan tidak ditemukan.',
+  RENEWAL_PENDING_EXISTS: 'Item ini sudah punya pengajuan perpanjangan yang menunggu keputusan.',
+  RENEWAL_ALREADY_DECIDED: 'Pengajuan ini sudah diputuskan.',
+  RENEWAL_EXPIRY_NOT_LATER: 'Tanggal berakhir baru harus setelah tanggal berakhir saat ini.',
+
   ASSET_NOT_FOUND: 'Aset tidak ditemukan.',
   HOSTNAME_TAKEN: 'Hostname sudah terdaftar.',
   ASSET_HAS_ALERTS: 'Aset tidak dapat dihapus karena memiliki riwayat alert. Nonaktifkan aset sebagai gantinya.',

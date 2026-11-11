@@ -101,6 +101,11 @@ enum AuditAction {
   USER_UPDATE
   USER_UNLOCK
   USER_RESET_PASSWORD
+  LIFECYCLE_CREATE
+  LIFECYCLE_UPDATE
+  LIFECYCLE_DELETE
+  RENEWAL_REQUEST
+  RENEWAL_DECIDE
 }
 
 model User {
@@ -296,4 +301,70 @@ model AuditLog {
 
   @@index([action, createdAt])
   @@index([actorUsername, createdAt])
+}
+
+/// Kategori item siklus hidup (OS, lisensi, sertifikat, garansi, kontrak vendor)
+enum LifecycleCategory {
+  OS
+  LICENSE
+  CERTIFICATE
+  WARRANTY
+  CONTRACT
+}
+
+enum LifecycleStatus {
+  ACTIVE
+  RENEWED
+  TERMINATED
+  INACTIVE
+}
+
+enum RenewalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Item yang punya tanggal berakhir: OS end-of-support, lisensi, sertifikat SSL/TLS, garansi, kontrak.
+model LifecycleItem {
+  id          String            @id @default(uuid())
+  /// Kode unik yang dibaca manusia, mis. LIC-001
+  code        String            @unique
+  name        String
+  category    LifecycleCategory
+  status      LifecycleStatus   @default(ACTIVE)
+  /// Tanggal berakhir (tanpa jam)
+  expiryDate  DateTime          @db.Date
+  quantity    Int               @default(1)
+  allocated   Int               @default(0)
+  location    String?
+  picName     String?
+  vendor      String?
+  notes       String?
+  createdById String?
+  updatedById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  renewals    RenewalRequest[]
+
+  @@index([category, expiryDate])
+}
+
+/// Pengajuan perpanjangan untuk satu item siklus hidup.
+model RenewalRequest {
+  id              String        @id @default(uuid())
+  number          Int           @unique @default(autoincrement())
+  itemId          String
+  item            LifecycleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  status          RenewalStatus @default(PENDING)
+  note            String?
+  requestedById   String
+  requestedByName String
+  decidedById     String?
+  decidedByName   String?
+  decisionNote    String?
+  decidedAt       DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([itemId, status])
 }

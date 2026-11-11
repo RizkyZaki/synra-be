@@ -153,6 +153,23 @@ NEW ──acknowledge──▶ ACKNOWLEDGED ──start (catatan)──▶ IN_PR
 Dapat diubah lewat `PUT /api/v1/thresholds/:metric`. Konfigurasi ditolak bila nilai level aktif
 tidak naik sesuai urutan severity. Setiap perubahan tercatat di audit dengan nilai sebelum dan sesudah.
 
+## Siklus hidup
+
+OS end-of-support, lisensi, sertifikat SSL/TLS, garansi, dan kontrak vendor (`/api/v1/lifecycle`).
+Setiap item membawa `daysLeft` dan `expiryLevel` (lewat = EXPIRED, ≤30 hari CRITICAL, ≤90 HIGH,
+≤180 MEDIUM, ≤365 LOW), dihitung dengan tanggal `REPORT_TIMEZONE`.
+
+| Aksi | Role |
+|---|---|
+| Lihat item dan pengajuan | Semua role |
+| Tambah dan ubah item | ADMIN, SUPERVISOR |
+| Hapus item | ADMIN |
+| Ajukan perpanjangan (`POST /lifecycle/:id/renewals`) | ADMIN, SUPERVISOR, OPERATOR |
+| Setujui atau tolak (`PATCH /lifecycle/renewals/:id`) | ADMIN, SUPERVISOR |
+
+Satu item hanya boleh punya satu pengajuan yang menunggu. Saat disetujui dengan `newExpiryDate`,
+tanggal berakhir item diperbarui dan statusnya menjadi RENEWED. Semua aksi tercatat di audit log.
+
 ## Catatan keamanan dan data
 
 - Akses ke Elasticsearch hanya membaca (search, point-in-time, aggregation).
