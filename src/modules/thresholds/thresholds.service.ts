@@ -75,7 +75,11 @@ export class ThresholdsService implements OnModuleInit {
         data: levels.map((l) => ({
           metric,
           ...l,
-          recommendation: l.recommendation ?? before.find((b) => b.severity === l.severity)?.recommendation ?? DEFAULT_RECOMMENDATION[metric],
+          // undefined = pertahankan teks lama; string kosong = kembali ke teks default.
+          recommendation:
+            l.recommendation == null
+              ? (before.find((b) => b.severity === l.severity)?.recommendation ?? DEFAULT_RECOMMENDATION[metric])
+              : l.recommendation.trim() || DEFAULT_RECOMMENDATION[metric],
           updatedById: actor.id,
         })),
       });
@@ -95,10 +99,13 @@ export class ThresholdsService implements OnModuleInit {
     const error = validateLevels(rule.metric, proposed);
     if (error) throw new BadRequestException(error);
 
+    const data = { ...dto };
+    if (data.recommendation !== undefined) data.recommendation = data.recommendation.trim() || DEFAULT_RECOMMENDATION[rule.metric];
+
     return this.prisma.$transaction(async (tx) => {
       const updated = await tx.thresholdRule.update({
         where: { id },
-        data: { ...dto, updatedById: actor.id },
+        data: { ...data, updatedById: actor.id },
       });
       await this.logChange(tx, actor, meta, rule.metric, [rule], [updated]);
       return updated;
@@ -134,7 +141,7 @@ function toLevel(r: ThresholdRule): RuleLevel {
 }
 
 function auditView(r: ThresholdRule) {
-  return { severity: r.severity, operator: r.operator, value: r.value, enabled: r.enabled };
+  return { severity: r.severity, operator: r.operator, value: r.value, enabled: r.enabled, recommendation: r.recommendation };
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {
