@@ -1,5 +1,5 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
-import { AlertAction, AlertStatus, AuditAction, Prisma } from '@prisma/client';
+import { AlertAction, AlertStatus, AuditAction, Prisma, RuleMetric } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MetricsRepository } from '../metrics/metrics.repository';
 import { ThresholdsService } from '../thresholds/thresholds.service';
@@ -147,7 +147,14 @@ export class AlertsEngineService {
         await this.prisma.$transaction([
           this.prisma.alert.update({
             where: { id: u.alertId },
-            data: { severity: f.severity, problem: f.problem, thresholdValue: f.threshold, lastValue: f.value, lastEvaluatedAt: now },
+            data: {
+              severity: f.severity,
+              problem: f.problem,
+              thresholdValue: f.threshold,
+              lastValue: f.value,
+              recommendation: f.recommendation,
+              lastEvaluatedAt: now,
+            },
           }),
           this.prisma.alertEvent.create({
             data: {
@@ -167,10 +174,17 @@ export class AlertsEngineService {
 
     // 4. Alert terbuka yang kondisinya tidak lagi ditemukan ditandai pulih (tidak ditutup otomatis:
     //    penutupan tetap oleh manusia dengan catatan). Bila kondisi muncul lagi, penanda dikembalikan.
+    //    Aset stale tidak dievaluasi selain HOST_STALE (datanya sudah basi), jadi alert metrik lainnya
+    //    belum tentu pulih: kondisinya tidak diketahui dan penandanya dibiarkan apa adanya.
     const activeIds = plan.update.map((u) => u.alertId);
     await this.prisma.$transaction([
       this.prisma.alert.updateMany({
-        where: { status: { not: AlertStatus.CLOSED }, conditionActive: true, id: { notIn: activeIds } },
+        where: {
+          status: { not: AlertStatus.CLOSED },
+          conditionActive: true,
+          id: { notIn: activeIds },
+          NOT: { assetId: { in: staleIds }, metric: { not: RuleMetric.HOST_STALE } },
+        },
         data: { conditionActive: false, recoveredAt: now },
       }),
       this.prisma.alert.updateMany({
