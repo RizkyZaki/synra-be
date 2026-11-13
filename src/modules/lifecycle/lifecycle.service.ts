@@ -13,9 +13,21 @@ import {
   DecideRenewalDto,
   ListLifecycleQueryDto,
   ListRenewalsQueryDto,
+  UpdateExpiryThresholdsDto,
   UpdateLifecycleItemDto,
 } from './dto/lifecycle.dto';
-import { daysBetween, expiryLevel, nextCode, renewalCode, toDateOnly, todayIn } from './lifecycle-rules';
+import {
+  DEFAULT_EXPIRY_THRESHOLDS,
+  EXPIRY_LEVELS,
+  ExpiryThresholds,
+  daysBetween,
+  expiryLevel,
+  nextCode,
+  renewalCode,
+  toDateOnly,
+  todayIn,
+  validateExpiryThresholds,
+} from './lifecycle-rules';
 
 type ItemWithPending = LifecycleItem & { _count?: { renewals: number } };
 type RenewalWithItem = RenewalRequest & { item: Pick<LifecycleItem, 'code' | 'name' | 'category'> };
@@ -33,6 +45,7 @@ export class LifecycleService {
   }
 
   async list(q: ListLifecycleQueryDto) {
+    const t = await this.expiryThresholds();
     const where: Prisma.LifecycleItemWhereInput = {
       category: q.category,
       status: q.status,
@@ -59,13 +72,14 @@ export class LifecycleService {
       this.prisma.lifecycleItem.count({ where }),
     ]);
     return paginate(
-      rows.map((r) => this.present(r)),
+      rows.map((r) => this.present(r, t)),
       total,
       q,
     );
   }
 
   async get(id: string) {
+    const t = await this.expiryThresholds();
     const item = await this.prisma.lifecycleItem.findUnique({
       where: { id },
       include: {
@@ -76,12 +90,13 @@ export class LifecycleService {
     if (!item) throw new NotFoundException(MSG.LIFECYCLE_NOT_FOUND);
     const { renewals, ...rest } = item;
     return {
-      ...this.present(rest),
+      ...this.present(rest, t),
       renewals: renewals.map((r) => this.presentRenewal({ ...r, item: { code: item.code, name: item.name, category: item.category } })),
     };
   }
 
   async create(dto: CreateLifecycleItemDto, actor: AuthUser, meta: RequestMeta) {
+    const t = await this.expiryThresholds();
     assertQuota(dto.quantity ?? 1, dto.allocated ?? 0);
     const existing = await this.prisma.lifecycleItem.findMany({ where: { category: dto.category }, select: { code: true } });
     const code = nextCode(
@@ -96,11 +111,12 @@ export class LifecycleService {
         { action: AuditAction.LIFECYCLE_CREATE, actorId: actor.id, actorUsername: actor.username, entity: 'LifecycleItem', entityId: item.id, after: snapshot(item), meta },
         tx,
       );
-      return this.present(item);
+      return this.present(item, t);
     });
   }
 
   async update(id: string, dto: UpdateLifecycleItemDto, actor: AuthUser, meta: RequestMeta) {
+    const t = await this.expiryThresholds();
     const before = await this.findItem(id);
     assertQuota(dto.quantity ?? before.quantity, dto.allocated ?? before.allocated);
     // Kategori menentukan prefix kode, jadi tidak boleh dipindah setelah dibuat.
@@ -114,7 +130,7 @@ export class LifecycleService {
         { action: AuditAction.LIFECYCLE_UPDATE, actorId: actor.id, actorUsername: actor.username, entity: 'LifecycleItem', entityId: id, before: snapshot(before), after: snapshot(item), meta },
         tx,
       );
-      return this.present(item);
+      return this.present(item, t);
     });
   }
 
@@ -225,6 +241,35 @@ export class LifecycleService {
     return item;
   }
 
+  /** Batas sisa hari per level urgensi. Level yang belum tersimpan memakai nilai default. */
+  async expiryThresholds(): Promise<ExpiryThresholds> {
+    const rows = await this.prisma.expiryThreshold.findMany();
+    const t = { ...DEFAULT_EXPIRY_THRESHOLDS };
+    for (const r of rows) if ((EXPIRY_LEVELS as readonly string[]).includes(r.severity)) t[r.severity as keyof ExpiryThresholds] = r.days;
+    return t;
+  }
+
+  async updateExpiryThresholds(dto: UpdateExpiryThresholdsDto, actor: AuthUser, meta: RequestMeta): Promise<ExpiryThresholds> {
+    const before = await this.expiryThresholds();
+    const after: ExpiryThresholds = { ...before, ...stripUndefined(dto) };
+    const error = validateExpiryThresholds(after);
+    if (error) throw new BadRequestException(error);
+    await this.prisma.$transaction(async (tx) => {
+      for (const level of EXPIRY_LEVELS) {
+        await tx.expiryThreshold.upsert({
+          where: { severity: level },
+          create: { severity: level, days: after[level], updatedById: actor.id },
+          update: { days: after[level], updatedById: actor.id },
+        });
+      }
+      await this.audit.log(
+        { action: AuditAction.THRESHOLD_UPDATE, actorId: actor.id, actorUsername: actor.username, entity: 'ExpiryThreshold', entityId: 'LIFECYCLE_EXPIRY', before, after, meta },
+        tx,
+      );
+    });
+    return after;
+  }
+
   private async actorName(actor: AuthUser): Promise<string> {
     const user = await this.prisma.user.findUnique({ where: { id: actor.id }, select: { fullName: true } });
     return user?.fullName ?? actor.username;
@@ -234,7 +279,7 @@ export class LifecycleService {
     return todayIn(this.tz);
   }
 
-  private present(item: ItemWithPending) {
+  private present(item: ItemWithPending, t: ExpiryThresholds) {
     const { _count, expiryDate, createdById: _c, updatedById: _u, ...rest } = item;
     const expiry = toDateOnly(expiryDate);
     const daysLeft = daysBetween(this.today(), expiry);
@@ -242,7 +287,7 @@ export class LifecycleService {
       ...rest,
       expiryDate: expiry,
       daysLeft,
-      expiryLevel: expiryLevel(daysLeft),
+      expiryLevel: expiryLevel(daysLeft, t),
       pendingRenewals: _count?.renewals ?? 0,
     };
   }
@@ -283,4 +328,8 @@ function snapshot(item: LifecycleItem): Prisma.InputJsonValue {
     picName: item.picName,
     vendor: item.vendor,
   };
+}
+
+function stripUndefined<T extends object>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
 }

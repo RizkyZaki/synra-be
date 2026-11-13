@@ -11,17 +11,41 @@ export const CODE_PREFIX: Record<LifecycleCategory, string> = {
 
 export type ExpiryLevel = 'EXPIRED' | 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 
+/** Level yang batas harinya bisa diatur, dari yang paling mendesak. */
+export const EXPIRY_LEVELS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'] as const;
+export type ConfigurableExpiryLevel = (typeof EXPIRY_LEVELS)[number];
+
+/** Batas sisa hari (inklusif) per level, mis. CRITICAL: 30 berarti sisa ≤ 30 hari. */
+export type ExpiryThresholds = Record<ConfigurableExpiryLevel, number>;
+
+export const DEFAULT_EXPIRY_THRESHOLDS: ExpiryThresholds = { CRITICAL: 30, HIGH: 90, MEDIUM: 180, LOW: 365 };
+
+export const EXPIRY_DAYS_MAX = 3650;
+
 /**
- * Tingkat urgensi berdasarkan sisa hari. Batasnya sama dengan yang dipakai web:
- * lewat = EXPIRED, ≤30 CRITICAL, ≤90 HIGH, ≤180 MEDIUM, ≤365 LOW, selebihnya INFO.
+ * Tingkat urgensi berdasarkan sisa hari. Default: lewat = EXPIRED, ≤30 CRITICAL, ≤90 HIGH,
+ * ≤180 MEDIUM, ≤365 LOW, selebihnya INFO. Batasnya bisa diubah admin (lihat ExpiryThreshold).
  */
-export function expiryLevel(daysLeft: number): ExpiryLevel {
+export function expiryLevel(daysLeft: number, t: ExpiryThresholds = DEFAULT_EXPIRY_THRESHOLDS): ExpiryLevel {
   if (daysLeft < 0) return 'EXPIRED';
-  if (daysLeft <= 30) return 'CRITICAL';
-  if (daysLeft <= 90) return 'HIGH';
-  if (daysLeft <= 180) return 'MEDIUM';
-  if (daysLeft <= 365) return 'LOW';
+  for (const level of EXPIRY_LEVELS) if (daysLeft <= t[level]) return level;
   return 'INFO';
+}
+
+/** Mengembalikan pesan error, atau null bila valid. Batas harus naik tegas dari CRITICAL ke LOW. */
+export function validateExpiryThresholds(t: ExpiryThresholds): string | null {
+  for (const level of EXPIRY_LEVELS) {
+    const v = t[level];
+    if (!Number.isInteger(v) || v < 0 || v > EXPIRY_DAYS_MAX) {
+      return `Batas hari ${level} harus bilangan bulat 0–${EXPIRY_DAYS_MAX}.`;
+    }
+  }
+  for (let i = 1; i < EXPIRY_LEVELS.length; i++) {
+    if (t[EXPIRY_LEVELS[i]] <= t[EXPIRY_LEVELS[i - 1]]) {
+      return 'Batas hari harus naik berurutan: Critical < High < Medium < Low.';
+    }
+  }
+  return null;
 }
 
 /** Tanggal hari ini (YYYY-MM-DD) di zona waktu tertentu. */

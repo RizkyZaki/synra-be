@@ -1,4 +1,4 @@
-import { daysBetween, expiryLevel, nextCode, renewalCode, todayIn } from './lifecycle-rules';
+import { daysBetween, expiryLevel, nextCode, renewalCode, todayIn, validateExpiryThresholds } from './lifecycle-rules';
 
 describe('lifecycle rules', () => {
   it('menentukan tingkat urgensi dari sisa hari', () => {
@@ -10,6 +10,23 @@ describe('lifecycle rules', () => {
     expect(expiryLevel(180)).toBe('MEDIUM');
     expect(expiryLevel(365)).toBe('LOW');
     expect(expiryLevel(366)).toBe('INFO');
+  });
+
+  it('memakai batas hari yang diatur admin', () => {
+    const t = { CRITICAL: 14, HIGH: 60, MEDIUM: 120, LOW: 200 };
+    expect(expiryLevel(14, t)).toBe('CRITICAL');
+    expect(expiryLevel(15, t)).toBe('HIGH');
+    expect(expiryLevel(60, t)).toBe('HIGH');
+    expect(expiryLevel(121, t)).toBe('LOW');
+    expect(expiryLevel(201, t)).toBe('INFO');
+  });
+
+  it('memvalidasi urutan dan rentang batas hari', () => {
+    expect(validateExpiryThresholds({ CRITICAL: 30, HIGH: 90, MEDIUM: 180, LOW: 365 })).toBeNull();
+    expect(validateExpiryThresholds({ CRITICAL: 90, HIGH: 90, MEDIUM: 180, LOW: 365 })).not.toBeNull();
+    expect(validateExpiryThresholds({ CRITICAL: 30, HIGH: 20, MEDIUM: 180, LOW: 365 })).not.toBeNull();
+    expect(validateExpiryThresholds({ CRITICAL: -1, HIGH: 90, MEDIUM: 180, LOW: 365 })).not.toBeNull();
+    expect(validateExpiryThresholds({ CRITICAL: 1.5, HIGH: 90, MEDIUM: 180, LOW: 365 })).not.toBeNull();
   });
 
   it('menghitung selisih hari kalender', () => {

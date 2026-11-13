@@ -9,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -129,4 +130,37 @@ export class ListRenewalsQueryDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(RenewalStatus, { message: 'Status pengajuan tidak valid.' })
   status?: RenewalStatus;
+}
+
+const DAYS_MSG = 'Batas hari harus bilangan bulat 0–3650.';
+
+/** Batas sisa hari (inklusif) per level urgensi. Field yang tidak dikirim tidak diubah. */
+export class UpdateExpiryThresholdsDto {
+  /** @example 30 */
+  @IsOptional()
+  @IsInt({ message: DAYS_MSG })
+  @Min(0, { message: DAYS_MSG })
+  @Max(3650, { message: DAYS_MSG })
+  CRITICAL?: number;
+
+  /** @example 90 */
+  @IsOptional()
+  @IsInt({ message: DAYS_MSG })
+  @Min(0, { message: DAYS_MSG })
+  @Max(3650, { message: DAYS_MSG })
+  HIGH?: number;
+
+  /** @example 180 */
+  @IsOptional()
+  @IsInt({ message: DAYS_MSG })
+  @Min(0, { message: DAYS_MSG })
+  @Max(3650, { message: DAYS_MSG })
+  MEDIUM?: number;
+
+  /** @example 365 */
+  @IsOptional()
+  @IsInt({ message: DAYS_MSG })
+  @Min(0, { message: DAYS_MSG })
+  @Max(3650, { message: DAYS_MSG })
+  LOW?: number;
 }

@@ -157,13 +157,17 @@ tidak naik sesuai urutan severity. Setiap perubahan tercatat di audit dengan nil
 
 OS end-of-support, lisensi, sertifikat SSL/TLS, garansi, dan kontrak vendor (`/api/v1/lifecycle`).
 Setiap item membawa `daysLeft` dan `expiryLevel` (lewat = EXPIRED, ≤30 hari CRITICAL, ≤90 HIGH,
-≤180 MEDIUM, ≤365 LOW), dihitung dengan tanggal `REPORT_TIMEZONE`.
+≤180 MEDIUM, ≤365 LOW), dihitung dengan tanggal `REPORT_TIMEZONE`. Batas hari tersebut bisa diubah
+lewat `PUT /api/v1/lifecycle/thresholds` (body mis. `{ "CRITICAL": 14, "HIGH": 60 }`) dan harus naik
+berurutan CRITICAL < HIGH < MEDIUM < LOW. Perubahan tercatat di audit.
 
 | Aksi | Role |
 |---|---|
 | Lihat item dan pengajuan | Semua role |
 | Tambah dan ubah item | ADMIN, SUPERVISOR |
 | Hapus item | ADMIN |
+| Lihat batas hari (`GET /lifecycle/thresholds`) | Semua role |
+| Ubah batas hari (`PUT /lifecycle/thresholds`) | ADMIN |
 | Ajukan perpanjangan (`POST /lifecycle/:id/renewals`) | ADMIN, SUPERVISOR, OPERATOR |
 | Setujui atau tolak (`PATCH /lifecycle/renewals/:id`) | ADMIN, SUPERVISOR |
 

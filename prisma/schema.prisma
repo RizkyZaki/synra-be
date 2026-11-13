@@ -342,6 +342,14 @@ enum RenewalStatus {
   REJECTED
 }
 
+/// Batas sisa hari untuk tingkat urgensi siklus hidup (mis. CRITICAL bila sisa ≤ 30 hari).
+model ExpiryThreshold {
+  severity    Severity @id
+  days        Int
+  updatedById String?
+  updatedAt   DateTime @updatedAt
+}
+
 /// Item yang punya tanggal berakhir: OS end-of-support, lisensi, sertifikat SSL/TLS, garansi, kontrak.
 model LifecycleItem {
   id          String            @id @default(uuid())
