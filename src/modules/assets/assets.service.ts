@@ -1,11 +1,12 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { AlertStatus, Asset, AssetCategory, AuditAction, Host, Prisma, Role, Severity } from '@prisma/client';
+import { AlertStatus, Asset, AssetCategory, AuditAction, Host, Prisma, Severity } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { MetricsRepository, LatestSnapshot } from '../metrics/metrics.repository';
 import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { MSG } from '../../common/constants/messages';
+import { canSupervise } from '../../common/permissions';
 import { paginate } from '../../common/dto/pagination.dto';
 import { ScopeFilterDto, assetScope } from '../../common/dto/scope-filter.dto';
 import { CreateAssetDto, ListAssetsQueryDto, UpdateAssetDto } from './dto/asset.dto';
@@ -212,11 +213,14 @@ export class AssetsService {
     }
   }
 
-  /** Supervisor yang dipilih harus user aktif ber-role SUPERVISOR; bila kosong, supervisor yang login dipakai sendiri. */
+  /**
+   * Supervisor yang dipilih harus user aktif yang role-nya punya hak "Supervisor aset";
+   * bila kosong dan yang login sendiri supervisor, dirinya yang dipakai.
+   */
   private async resolveSupervisor(id: string | undefined, actor: AuthUser): Promise<string | null> {
-    if (!id) return actor.role === Role.SUPERVISOR ? actor.id : null;
-    const user = await this.prisma.user.findUnique({ where: { id } });
-    if (!user || !user.isActive || user.role !== Role.SUPERVISOR) {
+    if (!id) return canSupervise(actor.roleCode, actor.permissions) ? actor.id : null;
+    const user = await this.prisma.user.findUnique({ where: { id }, include: { role: true } });
+    if (!user || !user.isActive || !canSupervise(user.role.code, user.role.permissions)) {
       throw new BadRequestException(MSG.SUPERVISOR_INVALID);
     }
     return id;

@@ -1,19 +1,19 @@
 import { Transform } from 'class-transformer';
 import {
   IsBoolean,
-  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { Role } from '@prisma/client';
 import { PaginationQueryDto } from '../../../common/dto/pagination.dto';
+import { RoleRefDto } from '../../auth/dto/auth-response.dto';
 import { IsStrongPassword } from './password.validator';
 
-const ROLE_MSG = `Role harus salah satu dari: ${Object.values(Role).join(', ')}.`;
+const ROLE_MSG = 'roleId harus berupa ID role yang valid (lihat GET /roles).';
 const toLowerTrim = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
@@ -39,8 +39,8 @@ export class CreateUserDto {
   @MaxLength(100, { message: 'Nama lengkap maksimal 100 karakter.' })
   fullName: string;
 
-  @IsEnum(Role, { message: ROLE_MSG })
-  role: Role;
+  @IsUUID('4', { message: ROLE_MSG })
+  roleId: string;
 }
 
 export class UpdateUserDto {
@@ -52,8 +52,8 @@ export class UpdateUserDto {
   fullName?: string;
 
   @IsOptional()
-  @IsEnum(Role, { message: ROLE_MSG })
-  role?: Role;
+  @IsUUID('4', { message: ROLE_MSG })
+  roleId?: string;
 
   @IsOptional()
   @IsBoolean({ message: 'isActive harus bernilai true atau false.' })
@@ -73,8 +73,8 @@ export class ListUsersQueryDto extends PaginationQueryDto {
   search?: string;
 
   @IsOptional()
-  @IsEnum(Role, { message: ROLE_MSG })
-  role?: Role;
+  @IsUUID('4', { message: ROLE_MSG })
+  roleId?: string;
 
   @IsOptional()
   // Baca dari `obj` (nilai mentah query string) agar "false" tidak terkonversi menjadi true.
@@ -90,7 +90,7 @@ export class UserResponseDto {
   id: string;
   username: string;
   fullName: string;
-  role: Role;
+  role: RoleRefDto;
   isActive: boolean;
   isLocked: boolean;
   lockedUntil: Date | null;

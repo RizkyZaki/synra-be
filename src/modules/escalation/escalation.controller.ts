@@ -1,9 +1,9 @@
 import { BadRequestException, Body, Controller, Get, Param, ParseEnumPipe, Put } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role, Severity } from '@prisma/client';
+import { Severity } from '@prisma/client';
 import { EscalationService } from './escalation.service';
 import { UpdateEscalationPolicyDto } from './dto/escalation.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 
@@ -13,10 +13,11 @@ const severityPipe = new ParseEnumPipe(Severity, {
 
 /**
  * Matriks eskalasi: batas respon (diakui) dan penyelesaian (ditutup) per severity, serta tingkat
- * eskalasi berjenjang ke Telegram. Semua role boleh membaca; hanya ADMIN yang boleh mengubah.
+ * eskalasi berjenjang ke Telegram. Membaca: notifications.view; mengubah: escalation.manage.
  */
 @ApiTags('Escalation')
 @ApiBearerAuth()
+@RequirePermission('notifications.view')
 @Controller('escalation')
 export class EscalationController {
   constructor(private readonly escalation: EscalationService) {}
@@ -27,7 +28,7 @@ export class EscalationController {
   }
 
   /** Mengganti kebijakan satu severity beserta seluruh tingkat eskalasinya. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('escalation.manage')
   @Put('policies/:severity')
   update(
     @Param('severity', severityPipe) severity: Severity,

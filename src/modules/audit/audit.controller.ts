@@ -2,11 +2,11 @@ import { Controller, Get, Query, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiProduces, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEnum, IsISO8601, IsOptional, IsString, MaxLength } from 'class-validator';
-import { AuditAction, Prisma, Role } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { Response } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from './audit.service';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { paginate, PaginationQueryDto } from '../../common/dto/pagination.dto';
@@ -49,7 +49,7 @@ const EXPORT_LIMIT = 50_000;
 /** Audit log hanya bisa dibaca. Tidak ada endpoint ubah atau hapus. */
 @ApiTags('Audit')
 @ApiBearerAuth()
-@Roles(Role.ADMIN, Role.AUDITOR)
+@RequirePermission('audit.view')
 @Controller('audit-logs')
 export class AuditController {
   constructor(

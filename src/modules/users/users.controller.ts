@@ -10,7 +10,6 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { UsersService } from './users.service';
 import {
   CreateUserDto,
@@ -19,14 +18,14 @@ import {
   UpdateUserDto,
   UserResponseDto,
 } from './dto/user.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ParseUuid } from '../../common/pipes/parse-uuid.pipe';
 
 @ApiTags('Users')
 @ApiBearerAuth()
-@Roles(Role.ADMIN)
+@RequirePermission('users.manage')
 @Controller('users')
 export class UsersController {
   constructor(private readonly users: UsersService) {}
@@ -37,7 +36,7 @@ export class UsersController {
   }
 
   /** Pilihan supervisor pada form aset. */
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('users.manage', 'assets.manage')
   @Get('supervisors')
   supervisors() {
     return this.users.supervisors();

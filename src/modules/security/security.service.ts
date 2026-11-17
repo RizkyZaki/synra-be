@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { AuditAction, LifecycleCategory, LifecycleStatus, Role } from '@prisma/client';
+import { AuditAction, LifecycleCategory, LifecycleStatus } from '@prisma/client';
+import { ADMIN_ROLE_CODE } from '../../common/permissions';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /** Akun yang tidak login selama ini dianggap tidak aktif dan sebaiknya ditinjau. */
@@ -19,6 +20,9 @@ const SENSITIVE_ACTIONS: AuditAction[] = [
   AuditAction.THRESHOLD_CREATE,
   AuditAction.THRESHOLD_DELETE,
   AuditAction.ESCALATION_UPDATE,
+  AuditAction.ROLE_CREATE,
+  AuditAction.ROLE_UPDATE,
+  AuditAction.ROLE_DELETE,
 ];
 
 /**
@@ -42,7 +46,7 @@ export class SecurityService {
       this.prisma.auditLog.count({ where: { action: AuditAction.LOGIN_FAILED, createdAt: { gte: since7d } } }),
       this.prisma.auditLog.count({ where: { action: AuditAction.LOGIN_SUCCESS, createdAt: { gte: since24h } } }),
       this.prisma.user.findMany({
-        select: { id: true, username: true, fullName: true, role: true, isActive: true, lockedUntil: true, lastLoginAt: true, failedLoginCount: true },
+        select: { id: true, username: true, fullName: true, role: { select: { code: true, name: true } }, isActive: true, lockedUntil: true, lastLoginAt: true, failedLoginCount: true },
       }),
       this.prisma.lifecycleItem.findMany({
         where: {
@@ -83,7 +87,7 @@ export class SecurityService {
         lockedAccounts: locked.length,
         dormantAccounts: dormant.length,
         activeUsers: active.length,
-        admins: active.filter((u) => u.role === Role.ADMIN).length,
+        admins: active.filter((u) => u.role.code === ADMIN_ROLE_CODE).length,
         certificatesExpiring: certs.filter((c) => daysLeft(c.expiryDate) >= 0).length,
         certificatesExpired: certs.filter((c) => daysLeft(c.expiryDate) < 0).length,
         osEndOfSupport: osItems.filter((o) => daysLeft(o.expiryDate) < 0).length,
@@ -95,8 +99,8 @@ export class SecurityService {
         byIp: topCounts(failed24h.map((f) => f.ipAddress ?? '-')),
         perHour: hourly(failed24h.map((f) => f.createdAt), now),
       },
-      lockedAccounts: locked.map((u) => ({ id: u.id, username: u.username, fullName: u.fullName, role: u.role, lockedUntil: u.lockedUntil })),
-      dormantAccounts: dormant.map((u) => ({ id: u.id, username: u.username, fullName: u.fullName, role: u.role, lastLoginAt: u.lastLoginAt })),
+      lockedAccounts: locked.map((u) => ({ id: u.id, username: u.username, fullName: u.fullName, role: u.role.name, lockedUntil: u.lockedUntil })),
+      dormantAccounts: dormant.map((u) => ({ id: u.id, username: u.username, fullName: u.fullName, role: u.role.name, lastLoginAt: u.lastLoginAt })),
       certificates: certs.map((c) => ({ ...c, daysLeft: daysLeft(c.expiryDate) })),
       operatingSystems: osItems.map((o) => ({ ...o, daysLeft: daysLeft(o.expiryDate) })),
       sensitiveChanges: sensitive,

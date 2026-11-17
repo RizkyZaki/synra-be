@@ -7,14 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum Role {
-  ADMIN
-  SUPERVISOR
-  OPERATOR
-  MANAGEMENT
-  AUDITOR
-}
-
 enum MetricType {
   CPU
   MEMORY
@@ -113,6 +105,9 @@ enum AuditAction {
   RENEWAL_DECIDE
   ESCALATION_UPDATE
   ALERT_ATTACHMENT_UPLOAD
+  ROLE_CREATE
+  ROLE_UPDATE
+  ROLE_DELETE
 }
 
 enum BackupStatus {
@@ -120,18 +115,36 @@ enum BackupStatus {
   FAILED
 }
 
+/// Role dinamis yang diatur ADMIN. `permissions` berisi kunci dari src/common/permissions.ts.
+/// Role sistem (isSystem) tidak dapat dihapus; role kode ADMIN selalu memiliki semua hak akses.
+model AccessRole {
+  id          String   @id @default(uuid())
+  /// Kode unik huruf besar, mis. SUPERVISOR atau SPV_JATIM. Tidak berubah setelah dibuat.
+  code        String   @unique
+  name        String   @unique
+  description String?
+  permissions String[]
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+}
+
 model User {
-  id               String    @id @default(uuid())
-  username         String    @unique
+  id               String     @id @default(uuid())
+  username         String     @unique
   passwordHash     String
   fullName         String
-  role             Role
-  isActive         Boolean   @default(true)
-  failedLoginCount Int       @default(0)
+  roleId           String
+  role             AccessRole @relation(fields: [roleId], references: [id])
+  isActive         Boolean    @default(true)
+  failedLoginCount Int        @default(0)
   lockedUntil      DateTime?
   lastLoginAt      DateTime?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@index([roleId])
 }
 
 model Host {

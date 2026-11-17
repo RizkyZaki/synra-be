@@ -26,13 +26,24 @@ export const MSG = {
   USER_NOT_FOUND: 'User tidak ditemukan.',
   USERNAME_TAKEN: 'Username sudah digunakan.',
   CANNOT_MODIFY_SELF: 'Anda tidak dapat mengubah role atau menonaktifkan akun sendiri.',
-  LAST_ADMIN: 'Tidak dapat mengubah admin aktif terakhir. Minimal harus ada satu ADMIN aktif.',
+  LAST_ADMIN: 'Tidak dapat mengubah admin aktif terakhir. Minimal harus ada satu Administrator aktif.',
+  USER_OUT_OF_REACH: 'Anda tidak dapat mengelola pengguna dengan hak akses melebihi milik Anda.',
+
+  // Role & hak akses
+  ROLE_NOT_FOUND: 'Role tidak ditemukan.',
+  ROLE_NAME_TAKEN: 'Nama role sudah digunakan.',
+  ROLE_CODE_TAKEN: 'Kode role sudah digunakan.',
+  ROLE_SYSTEM_DELETE: 'Role bawaan sistem tidak dapat dihapus.',
+  ROLE_IN_USE: (n: number) => `Role masih dipakai ${n} pengguna. Pindahkan pengguna ke role lain terlebih dahulu.`,
+  ROLE_ADMIN_LOCKED: 'Hak akses role Administrator selalu penuh dan tidak dapat diubah.',
+  ROLE_OUT_OF_REACH: 'Anda tidak dapat memberikan role atau hak akses yang melebihi milik Anda.',
+  PERMISSION_UNKNOWN: (keys: string) => `Hak akses tidak dikenal: ${keys}.`,
 
   // Host & aset
   HOST_NOT_FOUND: 'Host tidak ditemukan.',
   HOST_CODE_TAKEN: 'Kode Host sudah digunakan.',
   HOST_HAS_ASSETS: 'Host tidak dapat dihapus karena masih memiliki aset.',
-  SUPERVISOR_INVALID: 'Supervisor harus user aktif dengan role SUPERVISOR.',
+  SUPERVISOR_INVALID: 'Supervisor harus user aktif dengan role yang memiliki hak "Supervisor aset".',
   // Siklus hidup
   LIFECYCLE_NOT_FOUND: 'Item siklus hidup tidak ditemukan.',
   LIFECYCLE_QUOTA: 'Jumlah terpakai tidak boleh melebihi kuota.',

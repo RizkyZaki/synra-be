@@ -11,16 +11,15 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { IngestionService } from './ingestion.service';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('Ingestion')
 @ApiBearerAuth()
-@Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
+@RequirePermission('ingestion.manage')
 @Controller('ingestion')
 export class IngestionController {
   constructor(private readonly ingestion: IngestionService) {}

@@ -1,9 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto, ListAssetsQueryDto, UpdateAssetDto } from './dto/asset.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ParseUuid } from '../../common/pipes/parse-uuid.pipe';
@@ -31,13 +30,13 @@ export class AssetsController {
     return this.assets.get(id);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('assets.manage')
   @Post()
   create(@Body() dto: CreateAssetDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.assets.create(dto, actor, meta);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('assets.manage')
   @Patch(':id')
   update(
     @Param('id', ParseUuid) id: string,
@@ -49,7 +48,7 @@ export class AssetsController {
   }
 
   /** Hanya untuk aset tanpa riwayat alert; selain itu nonaktifkan lewat PATCH isActive=false. */
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('assets.manage')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUuid) id: string, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {

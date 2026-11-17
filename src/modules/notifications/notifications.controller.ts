@@ -1,9 +1,9 @@
 import { Controller, Get, HttpCode, HttpStatus, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsUUID } from 'class-validator';
-import { NotifStatus, Role } from '@prisma/client';
+import { NotifStatus } from '@prisma/client';
 import { NotificationsService } from './notifications.service';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { PaginationQueryDto } from '../../common/dto/pagination.dto';
 
@@ -36,7 +36,7 @@ export class NotificationsController {
   }
 
   /** Mengirim pesan uji ke chat Telegram yang dikonfigurasi. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('notifications.test')
   @Post('test')
   @HttpCode(HttpStatus.OK)
   test(@CurrentUser() actor: AuthUser) {

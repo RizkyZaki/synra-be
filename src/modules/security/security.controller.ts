@@ -1,16 +1,15 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { SecurityService } from './security.service';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 
 /**
- * Ringkasan keamanan. Memuat username dan IP percobaan login gagal, jadi aksesnya
- * disamakan dengan audit log: ADMIN dan AUDITOR.
+ * Ringkasan keamanan. Memuat username dan IP percobaan login gagal, jadi hak aksesnya
+ * (security.view) secara default hanya diberikan ke ADMIN dan AUDITOR.
  */
 @ApiTags('Security')
 @ApiBearerAuth()
-@Roles(Role.ADMIN, Role.AUDITOR)
+@RequirePermission('security.view')
 @Controller('security')
 export class SecurityController {
   constructor(private readonly security: SecurityService) {}

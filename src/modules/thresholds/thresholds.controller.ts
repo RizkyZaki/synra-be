@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, ParseEnumPipe, Patch, Put, BadRequestException } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role, RuleMetric } from '@prisma/client';
+import { RuleMetric } from '@prisma/client';
 import { ThresholdsService } from './thresholds.service';
 import { ReplaceThresholdsDto, UpdateThresholdRuleDto } from './dto/threshold.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ParseUuid } from '../../common/pipes/parse-uuid.pipe';
@@ -29,7 +29,7 @@ export class ThresholdsController {
    * Mengganti seluruh level satu metrik. Ditolak bila nilai level aktif tidak naik
    * sesuai urutan severity. Perubahan dicatat di audit (nilai sebelum dan sesudah).
    */
-  @Roles(Role.ADMIN)
+  @RequirePermission('thresholds.manage')
   @Put(':metric')
   replace(
     @Param('metric', metricPipe) metric: RuleMetric,
@@ -41,7 +41,7 @@ export class ThresholdsController {
   }
 
   /** Mengubah satu level (nilai, operator, aktif, rekomendasi). */
-  @Roles(Role.ADMIN)
+  @RequirePermission('thresholds.manage')
   @Patch('rule/:id')
   update(
     @Param('id', ParseUuid) id: string,

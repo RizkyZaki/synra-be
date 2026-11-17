@@ -1,10 +1,14 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { Role } from '@prisma/client';
 
 export interface AuthUser {
   id: string;
   username: string;
-  role: Role;
+  roleId: string;
+  /** Kode role, mis. ADMIN atau SPV_JATIM */
+  roleCode: string;
+  roleName: string;
+  /** Hak akses efektif role (ADMIN = semua) */
+  permissions: string[];
 }
 
 export const CurrentUser = createParamDecorator(

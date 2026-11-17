@@ -1,9 +1,8 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { HostsService } from './hosts.service';
 import { CreateHostDto, UpdateHostDto } from './dto/host.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ParseUuid } from '../../common/pipes/parse-uuid.pipe';
@@ -25,13 +24,13 @@ export class HostsController {
     return this.hosts.get(id);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('assets.manage')
   @Post()
   create(@Body() dto: CreateHostDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.hosts.create(dto, actor, meta);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('assets.manage')
   @Patch(':id')
   update(
     @Param('id', ParseUuid) id: string,
@@ -43,7 +42,7 @@ export class HostsController {
   }
 
   /** Hanya bisa dihapus bila tidak memiliki aset. */
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('assets.manage')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUuid) id: string, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {

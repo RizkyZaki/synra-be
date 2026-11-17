@@ -2,13 +2,15 @@ import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { BackupsService } from './backups.service';
 import { ListBackupJobsQueryDto, ListBackupRunsQueryDto } from './dto/backup.dto';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 
 /**
  * Status backup per job. Data berasal dari log JSON skrip backup yang dikirim Filebeat
- * (event.dataset = "synra.backup"). Semua role boleh membaca.
+ * (event.dataset = "synra.backup"). Membaca: backup.view.
  */
 @ApiTags('Backups')
 @ApiBearerAuth()
+@RequirePermission('backup.view')
 @Controller('backups')
 export class BackupsController {
   constructor(private readonly backups: BackupsService) {}

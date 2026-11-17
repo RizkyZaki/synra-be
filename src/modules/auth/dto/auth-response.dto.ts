@@ -1,10 +1,18 @@
-import { Role } from '@prisma/client';
+export class RoleRefDto {
+  id: string;
+  /** @example SUPERVISOR */
+  code: string;
+  /** @example Supervisor */
+  name: string;
+}
 
 export class AuthUserDto {
   id: string;
   username: string;
   fullName: string;
-  role: Role;
+  role: RoleRefDto;
+  /** Hak akses efektif role (ADMIN = semua). FE memakainya untuk menu dan tombol. */
+  permissions: string[];
 }
 
 export class LoginResponseDto {

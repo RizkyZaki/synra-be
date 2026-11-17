@@ -1,18 +1,21 @@
 import 'dotenv/config';
-import { AssetCategory, LifecycleCategory, PrismaClient, Role } from '@prisma/client';
+import { AssetCategory, LifecycleCategory, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { SIM_HOSTS, SIM_ASSETS } from '../scripts/sim-hosts';
 
 const prisma = new PrismaClient();
 const rounds = Number(process.env.BCRYPT_ROUNDS ?? 12);
 
-async function seedUser(username: string, password: string, fullName: string, role: Role) {
+/** Role sistem (ADMIN, SUPERVISOR, OPERATOR, MANAGEMENT, AUDITOR) dibuat oleh migrasi `dynamic_roles`. */
+async function seedUser(username: string, password: string, fullName: string, roleCode: string) {
   if (await prisma.user.findUnique({ where: { username } })) {
     console.log(`- User "${username}" sudah ada, dilewati.`);
     return;
   }
-  await prisma.user.create({ data: { username, passwordHash: await bcrypt.hash(password, rounds), fullName, role } });
-  console.log(`- User "${username}" (${role}) dibuat.`);
+  const role = await prisma.accessRole.findUnique({ where: { code: roleCode } });
+  if (!role) throw new Error(`Role ${roleCode} tidak ada. Jalankan "npx prisma migrate deploy" terlebih dahulu.`);
+  await prisma.user.create({ data: { username, passwordHash: await bcrypt.hash(password, rounds), fullName, roleId: role.id } });
+  console.log(`- User "${username}" (${roleCode}) dibuat.`);
 }
 
 async function seedAdmin() {
@@ -21,17 +24,17 @@ async function seedAdmin() {
   if (!password || password.length < 8) {
     throw new Error('SEED_ADMIN_PASSWORD wajib diisi di .env (minimal 8 karakter).');
   }
-  await seedUser(username, password, process.env.SEED_ADMIN_FULLNAME ?? 'Administrator SYNRA', Role.ADMIN);
+  await seedUser(username, password, process.env.SEED_ADMIN_FULLNAME ?? 'Administrator SYNRA', 'ADMIN');
 }
 
 /** User contoh per role, hanya bila SEED_DEMO_PASSWORD diisi (untuk development/uji FE). */
 async function seedDemoUsers() {
   const password = process.env.SEED_DEMO_PASSWORD;
   if (!password) return;
-  await seedUser('supervisor', password, 'Supervisor NOC', Role.SUPERVISOR);
-  await seedUser('operator', password, 'Operator NOC', Role.OPERATOR);
-  await seedUser('manajemen', password, 'Manajemen TI', Role.MANAGEMENT);
-  await seedUser('auditor', password, 'Auditor Internal', Role.AUDITOR);
+  await seedUser('supervisor', password, 'Supervisor NOC', 'SUPERVISOR');
+  await seedUser('operator', password, 'Operator NOC', 'OPERATOR');
+  await seedUser('manajemen', password, 'Manajemen TI', 'MANAGEMENT');
+  await seedUser('auditor', password, 'Auditor Internal', 'AUDITOR');
 }
 
 /** Host dan aset contoh yang cocok dengan host di simulator. */

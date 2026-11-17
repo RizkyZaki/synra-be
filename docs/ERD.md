@@ -1,8 +1,8 @@
 # ERD SYNRA
 
-Disusun dari `prisma/schema.prisma` sampai migrasi `20261113080000_expiry_thresholds`
+Disusun dari `prisma/schema.prisma` sampai migrasi `20261116090000_dynamic_roles`
 (`init`, `alert_condition_active`, `host_supervisor_asset_audit`, `lifecycle`, `backup_escalation`,
-`alert_attachments`, `expiry_thresholds`). Garis putus-putus = referensi logis tanpa foreign key
+`alert_attachments`, `expiry_thresholds`, `dynamic_roles`). Garis putus-putus = referensi logis tanpa foreign key
 (id pelaku disimpan sebagai riwayat, tetap valid walau user dinonaktifkan).
 
 ## Monitoring dan alert
@@ -24,13 +24,24 @@ erDiagram
     User |o..o{ Asset : "input / update / supervisor"
     User |o..o{ AlertAttachment : "pengunggah"
     User |o..o{ EscalationPolicy : "diubah oleh"
+    AccessRole ||--o{ User : "role"
 
+    AccessRole {
+        uuid id PK
+        string code UK "mis. ADMIN, SPV_JATIM; tetap"
+        string name UK
+        string description "nullable"
+        string_array permissions "kunci dari src/common/permissions.ts"
+        bool isSystem "role bawaan, tidak bisa dihapus"
+        datetime createdAt
+        datetime updatedAt
+    }
     User {
         uuid id PK
         string username UK
         string passwordHash "bcrypt"
         string fullName
-        Role role
+        uuid roleId FK
         bool isActive "default true"
         int failedLoginCount "lockout setelah 5x"
         datetime lockedUntil "nullable"
@@ -268,7 +279,6 @@ erDiagram
 
 | Enum | Nilai |
 |---|---|
-| `Role` | ADMIN, SUPERVISOR, OPERATOR, MANAGEMENT, AUDITOR |
 | `Severity` | INFO, LOW, MEDIUM, HIGH, CRITICAL |
 | `MetricType` | CPU, MEMORY, DISK, UPTIME, LOG_ERROR_COUNT |
 | `RuleMetric` | CPU, MEMORY, DISK, HOST_STALE, BACKUP_FAILED, BACKUP_AGE |
@@ -278,7 +288,7 @@ erDiagram
 | `NotifStatus` | SENT, FAILED, SKIPPED |
 | `AlertStatus` | NEW, ACKNOWLEDGED, IN_PROGRESS, PENDING_REVIEW, CLOSED (alur berurutan; PENDING_REVIEW bisa kembali ke IN_PROGRESS) |
 | `AlertAction` | CREATED, ACKNOWLEDGED, STARTED, SUBMITTED_REVIEW, RETURNED, CLOSED, SEVERITY_RAISED, ESCALATED |
-| `AuditAction` | LOGIN_SUCCESS, LOGIN_FAILED, ACCOUNT_LOCKED, PASSWORD_CHANGE, THRESHOLD_CREATE, THRESHOLD_UPDATE, THRESHOLD_DELETE, ALERT_STATUS_CHANGE, ALERT_EVALUATE, ASSET_CREATE, ASSET_UPDATE, ASSET_DELETE, HOST_CREATE, HOST_UPDATE, HOST_DELETE, REPORT_EXPORT, METRIC_IMPORT, USER_CREATE, USER_UPDATE, USER_UNLOCK, USER_RESET_PASSWORD, LIFECYCLE_CREATE, LIFECYCLE_UPDATE, LIFECYCLE_DELETE, RENEWAL_REQUEST, RENEWAL_DECIDE, ESCALATION_UPDATE, ALERT_ATTACHMENT_UPLOAD (perubahan `ExpiryThreshold` dicatat sebagai THRESHOLD_UPDATE) |
+| `AuditAction` | LOGIN_SUCCESS, LOGIN_FAILED, ACCOUNT_LOCKED, PASSWORD_CHANGE, THRESHOLD_CREATE, THRESHOLD_UPDATE, THRESHOLD_DELETE, ALERT_STATUS_CHANGE, ALERT_EVALUATE, ASSET_CREATE, ASSET_UPDATE, ASSET_DELETE, HOST_CREATE, HOST_UPDATE, HOST_DELETE, REPORT_EXPORT, METRIC_IMPORT, USER_CREATE, USER_UPDATE, USER_UNLOCK, USER_RESET_PASSWORD, LIFECYCLE_CREATE, LIFECYCLE_UPDATE, LIFECYCLE_DELETE, RENEWAL_REQUEST, RENEWAL_DECIDE, ESCALATION_UPDATE, ALERT_ATTACHMENT_UPLOAD, ROLE_CREATE, ROLE_UPDATE, ROLE_DELETE (perubahan `ExpiryThreshold` dicatat sebagai THRESHOLD_UPDATE) |
 | `BackupStatus` | SUCCESS, FAILED |
 | `LifecycleCategory` | OS, LICENSE, CERTIFICATE, WARRANTY, CONTRACT |
 | `LifecycleStatus` | ACTIVE, RENEWED, TERMINATED, INACTIVE |
@@ -293,7 +303,10 @@ erDiagram
 | Satu level per metrik dan severity | `UNIQUE (metric, severity)` pada `ThresholdRule` |
 | Audit tidak bisa diubah atau dihapus | Trigger `BEFORE UPDATE OR DELETE` dan `BEFORE TRUNCATE` pada `AuditLog` |
 | Host tidak bisa dihapus selama punya aset | FK `Asset.hostId` (RESTRICT) + validasi service |
-| Supervisor pada aset harus user aktif ber-role SUPERVISOR | Validasi service; `null` bila tidak dipilih dan pengisinya bukan supervisor |
+| Supervisor pada aset harus user aktif yang role-nya punya hak `assets.supervise` (bukan ADMIN) | Validasi service; `null` bila tidak dipilih dan pengisinya bukan supervisor |
+| Role tidak bisa dihapus selama masih dipakai user; role bawaan tidak bisa dihapus | FK `User.roleId` (RESTRICT) + validasi service |
+| Role ADMIN selalu punya semua hak akses | `effectivePermissions` mengabaikan isi `permissions` untuk kode ADMIN |
+| Non-ADMIN tidak bisa memberikan role/hak melebihi miliknya (termasuk reset password user ber-hak lebih tinggi) | Validasi service (`isWithinReach`) |
 | Metrik ikut terhapus bila aset dihapus | FK `Metric.assetId` ON DELETE CASCADE |
 | Riwayat alert ikut terhapus bila alert dihapus | FK `AlertEvent.alertId` ON DELETE CASCADE |
 | Lampiran bukti tidak bisa dihapus lewat aplikasi | Tidak ada endpoint hapus; ikut terhapus hanya bila alert dihapus (CASCADE) |

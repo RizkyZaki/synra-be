@@ -5,9 +5,11 @@ import { ReportsService } from './reports.service';
 import { DailyReportQueryDto, ExportReportQueryDto } from './dto/report.dto';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 
 @ApiTags('Reports')
 @ApiBearerAuth()
+@RequirePermission('reports.view')
 @Controller('reports')
 export class ReportsController {
   constructor(private readonly reports: ReportsService) {}

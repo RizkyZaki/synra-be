@@ -1,4 +1,5 @@
-import { AlertAction, AlertStatus, Role, Severity } from '@prisma/client';
+import { AlertAction, AlertStatus, Severity } from '@prisma/client';
+import { Permission } from '../../common/permissions';
 import { SEVERITY_RANK } from '../assets/asset-status';
 import type { Finding } from '../thresholds/threshold-evaluator';
 
@@ -8,7 +9,8 @@ export interface TransitionRule {
   from: AlertStatus[];
   to: AlertStatus;
   action: AlertAction;
-  roles: Role[];
+  /** Hak akses yang dibutuhkan (dicek oleh @RequirePermission di controller) */
+  permission: Permission;
   noteRequired: boolean;
   evidenceRequired: boolean;
 }
@@ -23,14 +25,14 @@ const OPEN: AlertStatus[] = [
 /**
  * Alur status alert:
  * NEW → ACKNOWLEDGED → IN_PROGRESS → PENDING_REVIEW → CLOSED, dengan PENDING_REVIEW → IN_PROGRESS (dikembalikan).
- * ADMIN dan SUPERVISOR juga dapat menutup langsung dari status terbuka mana pun (mis. false positive); catatan selalu wajib.
+ * Reviewer (alerts.review) juga dapat menutup langsung dari status terbuka mana pun (mis. false positive); catatan selalu wajib.
  */
 export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
   acknowledge: {
     from: [AlertStatus.NEW],
     to: AlertStatus.ACKNOWLEDGED,
     action: AlertAction.ACKNOWLEDGED,
-    roles: [Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR],
+    permission: 'alerts.handle',
     noteRequired: false,
     evidenceRequired: false,
   },
@@ -38,7 +40,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: [AlertStatus.ACKNOWLEDGED],
     to: AlertStatus.IN_PROGRESS,
     action: AlertAction.STARTED,
-    roles: [Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR],
+    permission: 'alerts.handle',
     noteRequired: true,
     evidenceRequired: false,
   },
@@ -46,7 +48,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: [AlertStatus.IN_PROGRESS],
     to: AlertStatus.PENDING_REVIEW,
     action: AlertAction.SUBMITTED_REVIEW,
-    roles: [Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR],
+    permission: 'alerts.handle',
     noteRequired: true,
     evidenceRequired: true,
   },
@@ -54,7 +56,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: [AlertStatus.PENDING_REVIEW],
     to: AlertStatus.IN_PROGRESS,
     action: AlertAction.RETURNED,
-    roles: [Role.ADMIN, Role.SUPERVISOR],
+    permission: 'alerts.review',
     noteRequired: true,
     evidenceRequired: false,
   },
@@ -62,7 +64,7 @@ export const TRANSITIONS: Record<TransitionName, TransitionRule> = {
     from: OPEN,
     to: AlertStatus.CLOSED,
     action: AlertAction.CLOSED,
-    roles: [Role.ADMIN, Role.SUPERVISOR],
+    permission: 'alerts.review',
     noteRequired: true,
     evidenceRequired: false,
   },

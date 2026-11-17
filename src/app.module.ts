@@ -7,6 +7,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
+import { RolesModule } from './modules/roles/roles.module';
 import { ElasticsearchModule } from './modules/elasticsearch/elasticsearch.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { HostsModule } from './modules/hosts/hosts.module';
@@ -23,7 +24,7 @@ import { EscalationModule } from './modules/escalation/escalation.module';
 import { SecurityModule } from './modules/security/security.module';
 import { HealthController } from './health.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
-import { RolesGuard } from './common/guards/roles.guard';
+import { PermissionsGuard } from './common/guards/permissions.guard';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 @Module({
@@ -36,6 +37,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
     MetricsModule,
     AuthModule,
     UsersModule,
+    RolesModule,
     HostsModule,
     AssetsModule,
     ThresholdsModule,
@@ -51,9 +53,9 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
   ],
   controllers: [HealthController],
   providers: [
-    // Urutan penting: autentikasi dulu, baru otorisasi role.
+    // Urutan penting: autentikasi dulu, baru otorisasi hak akses role.
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
   ],
 })

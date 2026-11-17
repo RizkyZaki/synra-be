@@ -1,6 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
 import { LifecycleService } from './lifecycle.service';
 import {
   CreateLifecycleItemDto,
@@ -11,18 +10,19 @@ import {
   UpdateExpiryThresholdsDto,
   UpdateLifecycleItemDto,
 } from './dto/lifecycle.dto';
-import { Roles } from '../../common/decorators/roles.decorator';
+import { RequirePermission } from '../../common/decorators/permissions.decorator';
 import { AuthUser, CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ReqMeta, RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { ParseUuid } from '../../common/pipes/parse-uuid.pipe';
 
 /**
  * Siklus hidup: OS, lisensi, sertifikat SSL/TLS, garansi, kontrak vendor.
- * Semua role boleh membaca. Kelola item dan memutuskan perpanjangan: ADMIN dan SUPERVISOR.
- * Mengajukan perpanjangan: ADMIN, SUPERVISOR, OPERATOR.
+ * Membaca: lifecycle.view. Kelola item dan memutuskan perpanjangan: lifecycle.manage.
+ * Mengajukan perpanjangan: lifecycle.request. Menghapus item: lifecycle.delete.
  */
 @ApiTags('Lifecycle')
 @ApiBearerAuth()
+@RequirePermission('lifecycle.view')
 @Controller('lifecycle')
 export class LifecycleController {
   constructor(private readonly lifecycle: LifecycleService) {}
@@ -34,13 +34,14 @@ export class LifecycleController {
   }
 
   /** Batas sisa hari per level urgensi (CRITICAL, HIGH, MEDIUM, LOW). */
+  @RequirePermission('lifecycle.view', 'thresholds.manage')
   @Get('thresholds')
   thresholds() {
     return this.lifecycle.expiryThresholds();
   }
 
   /** Mengubah batas hari. Harus naik berurutan: CRITICAL < HIGH < MEDIUM < LOW. Tercatat di audit. */
-  @Roles(Role.ADMIN)
+  @RequirePermission('thresholds.manage')
   @Put('thresholds')
   updateThresholds(@Body() dto: UpdateExpiryThresholdsDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.lifecycle.updateExpiryThresholds(dto, actor, meta);
@@ -51,7 +52,7 @@ export class LifecycleController {
     return this.lifecycle.listRenewals(q);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('lifecycle.manage')
   @Patch('renewals/:id')
   decide(
     @Param('id', ParseUuid) id: string,
@@ -67,13 +68,13 @@ export class LifecycleController {
     return this.lifecycle.get(id);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('lifecycle.manage')
   @Post()
   create(@Body() dto: CreateLifecycleItemDto, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.lifecycle.create(dto, actor, meta);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR)
+  @RequirePermission('lifecycle.manage')
   @Patch(':id')
   update(
     @Param('id', ParseUuid) id: string,
@@ -84,14 +85,14 @@ export class LifecycleController {
     return this.lifecycle.update(id, dto, actor, meta);
   }
 
-  @Roles(Role.ADMIN)
+  @RequirePermission('lifecycle.delete')
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseUuid) id: string, @CurrentUser() actor: AuthUser, @ReqMeta() meta: RequestMeta) {
     return this.lifecycle.remove(id, actor, meta);
   }
 
-  @Roles(Role.ADMIN, Role.SUPERVISOR, Role.OPERATOR)
+  @RequirePermission('lifecycle.request')
   @Post(':id/renewals')
   requestRenewal(
     @Param('id', ParseUuid) id: string,

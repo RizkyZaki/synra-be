@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { AuditAction, User } from '@prisma/client';
+import { AccessRole, AuditAction, User } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -11,6 +11,7 @@ import { LoginDto } from './dto/login.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthUserDto, LoginResponseDto } from './dto/auth-response.dto';
 import { isLocked, LockoutPolicy, registerFailure } from './lockout';
+import { effectivePermissions } from '../../common/permissions';
 
 @Injectable()
 export class AuthService {
@@ -38,7 +39,7 @@ export class AuthService {
   async login(dto: LoginDto, meta: RequestMeta): Promise<LoginResponseDto> {
     const username = dto.username.trim().toLowerCase();
     const now = new Date();
-    const user = await this.prisma.user.findUnique({ where: { username } });
+    const user = await this.prisma.user.findUnique({ where: { username }, include: { role: true } });
 
     if (!user) {
       await bcrypt.compare(dto.password, this.dummyHash);
@@ -94,16 +95,13 @@ export class AuthService {
       meta,
     });
 
-    const accessToken = await this.jwt.signAsync({
-      sub: user.id,
-      username: user.username,
-      role: user.role,
-    });
+    // Role tidak disimpan di token: dibaca ulang dari DB setiap request (JwtStrategy).
+    const accessToken = await this.jwt.signAsync({ sub: user.id, username: user.username });
     return { accessToken, tokenType: 'Bearer', expiresIn: this.expiresIn, user: toAuthUser(user) };
   }
 
   async me(userId: string): Promise<AuthUserDto> {
-    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId }, include: { role: true } });
     return toAuthUser(user);
   }
 
@@ -140,8 +138,14 @@ export class AuthService {
   }
 }
 
-function toAuthUser(user: User): AuthUserDto {
-  return { id: user.id, username: user.username, fullName: user.fullName, role: user.role };
+function toAuthUser(user: User & { role: AccessRole }): AuthUserDto {
+  return {
+    id: user.id,
+    username: user.username,
+    fullName: user.fullName,
+    role: { id: user.role.id, code: user.role.code, name: user.role.name },
+    permissions: effectivePermissions(user.role.code, user.role.permissions),
+  };
 }
 
 function formatJakarta(date: Date): string {
