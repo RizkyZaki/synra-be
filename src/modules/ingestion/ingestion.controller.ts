@@ -44,6 +44,17 @@ export class IngestionController {
   }
 
   /**
+   * Temukan host di Elasticsearch yang belum terdaftar dan daftarkan otomatis
+   * di bawah grup "DISCOVERED". Setelah selesai, jalankan `POST /run` untuk
+   * langsung menarik metriknya.
+   */
+  @Post('discover')
+  @HttpCode(HttpStatus.OK)
+  discover() {
+    return this.ingestion.discoverHosts();
+  }
+
+  /**
    * Impor metrik dari CSV (fallback bila Elasticsearch tidak dapat diakses).
    * Kolom: hostname, metric (CPU|MEMORY|DISK|UPTIME), value, timestamp (ISO 8601), label (mount point, opsional).
    */
@@ -68,4 +79,3 @@ export class IngestionController {
     return this.ingestion.importCsv(file, actor, meta);
   }
 }
-

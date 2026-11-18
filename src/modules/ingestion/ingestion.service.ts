@@ -386,6 +386,80 @@ export class IngestionService implements OnApplicationBootstrap, OnModuleDestroy
     return paginate(rows, total, q);
   }
 
+  /**
+   * Temukan host di metricbeat yang belum terdaftar sebagai aset, lalu daftarkan
+   * secara otomatis di bawah grup host "DISCOVERED" (dibuat bila belum ada).
+   * Mengembalikan daftar hostname yang baru didaftarkan.
+   */
+  async discoverHosts(): Promise<{ registered: string[]; alreadyKnown: string[] }> {
+    // Ambil semua hostname + IP terbaru dari metricbeat via aggregasi
+    const agg = await this.es.client.search({
+      index: this.metricbeatIndex,
+      ignore_unavailable: true,
+      allow_no_indices: true,
+      size: 0,
+      query: { exists: { field: 'host.name' } },
+      aggs: {
+        hosts: {
+          terms: { field: 'host.name', size: 1000 },
+          aggs: {
+            latest: { top_hits: { size: 1, sort: [{ '@timestamp': 'desc' }], _source: ['host.name', 'host.ip'] } },
+          },
+        },
+      },
+    });
+
+    type Bucket = { key: string; latest: { hits: { hits: { _source: { host: { name: string; ip?: string[] } } }[] } } };
+    const buckets = ((agg.aggregations?.hosts as { buckets?: Bucket[] })?.buckets ?? []);
+
+    if (buckets.length === 0) return { registered: [], alreadyKnown: [] };
+
+    // Cari mana yang belum terdaftar
+    const knownMap = await this.hostMap();
+    const unknown = buckets.filter((b) => !knownMap.has(b.key));
+    const alreadyKnown = buckets.filter((b) => knownMap.has(b.key)).map((b) => b.key);
+
+    if (unknown.length === 0) return { registered: [], alreadyKnown };
+
+    // Pastikan grup host "DISCOVERED" ada
+    const discoveredHost = await this.prisma.host.upsert({
+      where: { code: 'DISCOVERED' },
+      create: { code: 'DISCOVERED', name: 'Auto-Discovered', region: '' },
+      update: {},
+    });
+
+    // Daftarkan setiap host baru sebagai aset
+    const registered: string[] = [];
+    for (const b of unknown) {
+      const hostname = b.key;
+      const src = b.latest.hits.hits[0]?._source;
+      // Ambil IP pertama yang bukan link-local (non fe80::)
+      const ip =
+        src?.host?.ip?.find((i: string) => /^\d+\.\d+\.\d+\.\d+$/.test(i) && !i.startsWith('127.')) ?? '0.0.0.0';
+
+      try {
+        await this.prisma.asset.create({
+          data: {
+            hostname,
+            ipAddress: ip,
+            component: 'UNKNOWN',
+            hostId: discoveredHost.id,
+            category: 'HARDWARE',
+            type: 'SERVER',
+            picName: '-',
+          },
+        });
+        registered.push(hostname);
+        this.logger.log(`Auto-registered host: ${hostname} (${ip})`);
+      } catch (e) {
+        // Skip bila sudah ada (race condition)
+        this.logger.warn(`Gagal mendaftarkan ${hostname}: ${(e as Error).message}`);
+      }
+    }
+
+    return { registered, alreadyKnown };
+  }
+
   async status() {
     const [cursors, lastRun, esReachable] = await Promise.all([
       this.prisma.ingestionState.findMany(),
