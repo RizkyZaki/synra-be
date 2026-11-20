@@ -84,8 +84,17 @@ export class AlertsService {
     const note = input.note?.trim() || null;
     const evidence = input.evidence?.trim() || null;
     if (rule.noteRequired && !note) throw new BadRequestException(MSG.ALERT_NOTE_REQUIRED);
-    if (rule.evidenceRequired && !evidence && (await this.prisma.alertAttachment.count({ where: { alertId: id } })) === 0) {
-      throw new BadRequestException(MSG.ALERT_EVIDENCE_REQUIRED);
+    if (rule.evidenceRequired) {
+      const attachmentCount = await this.prisma.alertAttachment.count({ where: { alertId: id } });
+      if (!evidence && attachmentCount === 0) {
+        throw new BadRequestException(MSG.ALERT_EVIDENCE_REQUIRED);
+      }
+      if (!evidence) {
+        throw new BadRequestException(MSG.ALERT_EVIDENCE_TEXT_REQUIRED);
+      }
+      if (attachmentCount === 0) {
+        throw new BadRequestException(MSG.ALERT_EVIDENCE_FILE_REQUIRED);
+      }
     }
 
     const current = await this.prisma.alert.findUnique({ where: { id } });

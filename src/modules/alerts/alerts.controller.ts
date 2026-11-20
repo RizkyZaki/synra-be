@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFiles, UseInterceptors } from '@nestjs/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { AlertsService } from './alerts.service';
@@ -40,7 +40,7 @@ export class AlertsController {
 
   /**
    * Unggah lampiran bukti remediasi (field "files", maks. 5 file @ 10 MB per unggahan).
-   * Jenis: PNG, JPG, WEBP, PDF, TXT, LOG, CSV. Lampiran tidak bisa dihapus.
+   * Jenis: PNG, JPG, WEBP, PDF, TXT, LOG, CSV.
    */
   @RequirePermission('alerts.handle')
   @Post(':id/attachments')
@@ -66,6 +66,18 @@ export class AlertsController {
   @Get(':id/attachments/:attachmentId')
   downloadAttachment(@Param('id', ParseUuid) id: string, @Param('attachmentId', ParseUuid) attachmentId: string) {
     return this.attachments.download(id, attachmentId);
+  }
+
+  /** Hapus satu lampiran bukti remediasi. */
+  @RequirePermission('alerts.handle')
+  @Delete(':id/attachments/:attachmentId')
+  removeAttachment(
+    @Param('id', ParseUuid) id: string,
+    @Param('attachmentId', ParseUuid) attachmentId: string,
+    @CurrentUser() actor: AuthUser,
+    @ReqMeta() meta: RequestMeta,
+  ) {
+    return this.attachments.remove(id, attachmentId, actor, meta);
   }
 
   /** Menjalankan evaluasi threshold sekarang (tombol "Evaluasi EWS"). */

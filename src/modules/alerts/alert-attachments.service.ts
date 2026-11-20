@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AlertStatus, AuditAction } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { extname, resolve } from 'node:path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -111,6 +111,24 @@ export class AlertAttachmentsService {
       length: a.sizeBytes,
       disposition: `${inline ? 'inline' : 'attachment'}; filename*=UTF-8''${encodeURIComponent(a.fileName)}`,
     });
+  }
+
+  async remove(alertId: string, attachmentId: string, _actor: AuthUser, _meta: RequestMeta) {
+    const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
+    if (!alert) throw new NotFoundException(MSG.ALERT_NOT_FOUND);
+    if (alert.status === AlertStatus.CLOSED) {
+      throw new BadRequestException('Alert yang sudah ditutup tidak dapat diubah lampirannya.');
+    }
+
+    const attachment = await this.prisma.alertAttachment.findFirst({
+      where: { id: attachmentId, alertId },
+    });
+    if (!attachment) throw new NotFoundException(MSG.ATTACHMENT_NOT_FOUND);
+
+    await this.prisma.alertAttachment.delete({ where: { id: attachmentId } });
+    await unlink(resolve(this.dir, attachment.storageKey)).catch(() => undefined);
+
+    return { success: true, message: 'Lampiran berhasil dihapus.', id: attachmentId };
   }
 }
 
