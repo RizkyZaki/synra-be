@@ -428,21 +428,41 @@ export class IngestionService implements OnApplicationBootstrap, OnModuleDestroy
       update: {},
     });
 
+    // Perbarui aset yang sudah ada jika masih UNKNOWN atau IP masih 0.0.0.0
+    for (const b of buckets) {
+      const hostname = b.key;
+      const src = b.latest.hits.hits[0]?._source as Record<string, unknown> | undefined;
+      const ipList = (src?.host as Record<string, unknown> | undefined)?.ip as string[] | undefined;
+      const ip = ipList?.find((i: string) => /^\d+\.\d+\.\d+\.\d+$/.test(i) && !i.startsWith('127.'));
+      const inferred = inferComponent(hostname, src);
+
+      const updateData: { component?: string; ipAddress?: string } = {};
+      if (inferred !== 'UNKNOWN') updateData.component = inferred;
+      if (ip && ip !== '0.0.0.0') updateData.ipAddress = ip;
+
+      if (Object.keys(updateData).length > 0) {
+        await this.prisma.asset.updateMany({
+          where: { hostname, OR: [{ component: 'UNKNOWN' }, { ipAddress: '0.0.0.0' }] },
+          data: updateData,
+        });
+      }
+    }
+
     // Daftarkan setiap host baru sebagai aset
     const registered: string[] = [];
     for (const b of unknown) {
       const hostname = b.key;
-      const src = b.latest.hits.hits[0]?._source;
-      // Ambil IP pertama yang bukan link-local (non fe80::)
-      const ip =
-        src?.host?.ip?.find((i: string) => /^\d+\.\d+\.\d+\.\d+$/.test(i) && !i.startsWith('127.')) ?? '0.0.0.0';
+      const src = b.latest.hits.hits[0]?._source as Record<string, unknown> | undefined;
+      const ipList = (src?.host as Record<string, unknown> | undefined)?.ip as string[] | undefined;
+      const ip = ipList?.find((i: string) => /^\d+\.\d+\.\d+\.\d+$/.test(i) && !i.startsWith('127.')) ?? '0.0.0.0';
+      const component = inferComponent(hostname, src);
 
       try {
         await this.prisma.asset.create({
           data: {
             hostname,
             ipAddress: ip,
-            component: 'UNKNOWN',
+            component,
             hostId: discoveredHost.id,
             category: 'HARDWARE',
             type: 'SERVER',
@@ -450,7 +470,7 @@ export class IngestionService implements OnApplicationBootstrap, OnModuleDestroy
           },
         });
         registered.push(hostname);
-        this.logger.log(`Auto-registered host: ${hostname} (${ip})`);
+        this.logger.log(`Auto-registered host: ${hostname} (${ip}, ${component})`);
       } catch (e) {
         // Skip bila sudah ada (race condition)
         this.logger.warn(`Gagal mendaftarkan ${hostname}: ${(e as Error).message}`);
@@ -544,4 +564,23 @@ function describeEsError(e: unknown): string {
   const err = e as { name?: string; message?: string };
   if (err.name === 'ConnectionError' || err.name === 'TimeoutError') return `${MSG.ES_UNAVAILABLE} (${err.message})`;
   return err.message ?? String(e);
+}
+
+function inferComponent(hostname: string, src?: Record<string, unknown>): string {
+  const fields = src?.fields as Record<string, unknown> | undefined;
+  if (typeof fields?.component === 'string' && fields.component.trim()) {
+    return fields.component.trim().toUpperCase().replace(/\s+/g, '_');
+  }
+
+  const h = hostname.toLowerCase();
+  if (h.includes('appgw') || h.includes('gateway') || h.includes('-gw') || h.includes('gtw')) return 'API_GATEWAY';
+  if (h.includes('appbe') || h.includes('backend') || h.includes('-be') || h.includes('api')) return 'BACKEND';
+  if (h.includes('db') || h.includes('database') || h.includes('oracle') || h.includes('postgres') || h.includes('mysql')) return 'DATABASE';
+  if (h.includes('web') || h.includes('frontend') || h.includes('fe')) return 'WEB';
+  if (h.includes('esb') || h.includes('middleware') || h.includes('mw')) return 'MIDDLEWARE';
+  if (h.includes('cbs') || h.includes('core')) return 'CORE_BANKING';
+  if (h.includes('redis') || h.includes('cache')) return 'CACHE';
+  if (h.includes('kafka') || h.includes('mq') || h.includes('queue')) return 'MESSAGE_BROKER';
+
+  return 'UNKNOWN';
 }
