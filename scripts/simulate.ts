@@ -6,6 +6,8 @@
  *   npm run simulate -- --no-live          # backfill saja lalu keluar
  *   npm run simulate -- --reset            # hapus index simulasi dulu
  *
+ * Menolak jalan bila alamat Elasticsearch bukan lokal (localhost/elasticsearch), kecuali --force.
+ *
  * Juga mengirim log hasil backup (event.dataset = "synra.backup") ke index filebeat-sim-*.
  *
  * Menulis ke index metricbeat-sim-YYYY.MM.DD dan filebeat-sim-YYYY.MM.DD (cocok dengan pola
@@ -28,6 +30,23 @@ const RESET = args.get('reset') === 'true';
 const BACKFILL_STEP_SEC = 60;
 const LIVE_STEP_SEC = Number(args.get('interval') ?? 10);
 const NODE = process.env.SIM_ELASTICSEARCH_NODE ?? process.env.ELASTICSEARCH_NODE ?? 'http://localhost:9200';
+const FORCE = args.get('force') === 'true';
+/** Simulator menulis data palsu; hanya Elasticsearch lokal (atau container compose) yang diizinkan. */
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]', 'elasticsearch'];
+
+function nodeHost(): string {
+  try {
+    return new URL(NODE).hostname;
+  } catch {
+    return '';
+  }
+}
+
+if (!LOCAL_HOSTS.includes(nodeHost()) && !FORCE) {
+  console.error(`Simulator dibatalkan: Elasticsearch "${NODE}" bukan lokal. Simulator menulis data palsu dan tidak boleh diarahkan ke Elasticsearch kantor/produksi.`);
+  console.error('Isi SIM_ELASTICSEARCH_NODE=http://localhost:9200, atau tambahkan --force bila memang disengaja.');
+  process.exit(1);
+}
 
 const es = new Client({ node: NODE });
 
