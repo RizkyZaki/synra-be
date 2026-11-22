@@ -49,3 +49,8 @@ export const SIM_ASSETS: SimAsset[] = [
 
 /** Menit sebelum "sekarang" saat host-down berhenti mengirim data. */
 export const HOST_DOWN_MINUTES = 30;
+
+/** Host skenario "host-down" berhenti mengirim data sejak HOST_DOWN_MINUTES terakhir. */
+export function isSending(host: SimAsset, t: number): boolean {
+  return !(host.scenario === 'host-down' && Date.now() - t < HOST_DOWN_MINUTES * 60_000);
+}

@@ -13,7 +13,8 @@
  */
 import 'dotenv/config';
 import { Client } from '@elastic/elasticsearch';
-import { HOST_DOWN_MINUTES, SIM_ASSETS, SimAsset } from './sim-hosts';
+import { SIM_ASSETS, SimAsset, isSending } from './sim-hosts';
+import { backupRunsBetween } from './sim-backup';
 
 const args = new Map(
   process.argv.slice(2).map((a) => {
@@ -64,10 +65,6 @@ function disk(host: SimAsset, mount: string, t: number): number {
   return clampPct((mount === '/' ? 42 : 58) + wave(host, `disk${mount}`, t, 0, 1));
 }
 
-function isSending(host: SimAsset, t: number): boolean {
-  return !(host.scenario === 'host-down' && Date.now() - t < HOST_DOWN_MINUTES * 60_000);
-}
-
 // ------------------------------------------------------------------ dokumen
 
 const day = (t: number) => new Date(t).toISOString().slice(0, 10).replace(/-/g, '.');
@@ -111,78 +108,34 @@ function filebeatDocs(host: SimAsset, t: number): object[] {
 
 // ------------------------------------------------------------------ backup
 
-interface BackupJob {
-  name: string;
-  type: string;
-  everyMs: number;
-  /** Ukuran rata-rata dalam GB */
-  sizeGb: number;
-  target: string;
-}
-
-const HOUR = 3_600_000;
-
-/** Job backup per aset: database punya full harian + archive log per jam, lainnya snapshot konfigurasi. */
-function backupJobs(host: SimAsset): BackupJob[] {
-  if (host.backup === 'none') return [];
-  if (host.component === 'DATABASE') {
-    return [
-      { name: 'db-full', type: 'FULL', everyMs: 24 * HOUR, sizeGb: 180, target: 'nas-dc1:/backup/db' },
-      { name: 'db-archivelog', type: 'LOG', everyMs: HOUR, sizeGb: 2.5, target: 'nas-dc1:/backup/arch' },
-    ];
-  }
-  return [{ name: 'config-snapshot', type: 'SNAPSHOT', everyMs: 6 * HOUR, sizeGb: 0.4, target: 'nas-dc1:/backup/config' }];
-}
-
-/** Job yang gagal pada skenario "failing" dan sejak kapan gagalnya. */
-function isFailing(host: SimAsset, job: BackupJob, t: number): string | null {
-  if (host.backup !== 'failing') return null;
-  if (job.name === 'db-archivelog' && Date.now() - t < 4 * HOUR) return 'No space left on device: /backup/arch';
-  if (job.name === 'config-snapshot' && Date.now() - t < 6 * HOUR) return 'Koneksi ke nas-dc1 timeout setelah 30 detik';
-  return null;
-}
-
-function backupDoc(host: SimAsset, job: BackupJob, t: number): object {
-  const error = isFailing(host, job, t);
-  const seed = [...(host.hostname + job.name)].reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  const duration = Math.round(job.sizeGb * 20 + (seed % 60));
-  const size = Math.round(job.sizeGb * (0.95 + ((t / HOUR + seed) % 10) / 100) * 1024 ** 3);
-  return {
-    '@timestamp': new Date(t).toISOString(),
-    host: { name: host.hostname },
-    agent: { type: 'filebeat', version: '8.15.3' },
-    event: { dataset: 'synra.backup' },
-    log: { level: error ? 'error' : 'info' },
-    message: `backup ${job.name} ${error ? 'FAILED' : 'SUCCESS'}`,
-    synra: {
-      backup: {
-        job: job.name,
-        type: job.type,
-        status: error ? 'failed' : 'success',
-        started_at: new Date(t - duration * 1000).toISOString(),
-        size_bytes: error ? 0 : size,
-        duration_s: duration,
-        target: job.target,
-        ...(error ? { message: error } : {}),
-      },
-    },
-  };
-}
-
-/** Dokumen backup untuk semua jadwal job yang jatuh di (from, to]. Jadwal digeser 5 menit dari jam bulat. */
+/** Dokumen Filebeat (dataset synra.backup) untuk semua jadwal job yang jatuh di (from, to]. */
 function backupDocsBetween(from: number, to: number) {
-  const offset = 5 * 60_000;
-  const docs: { index: string; doc: object }[] = [];
-  for (const host of SIM_ASSETS) {
-    for (const job of backupJobs(host)) {
-      for (let k = Math.floor((from - offset) / job.everyMs) + 1; k * job.everyMs + offset <= to; k++) {
-        const t = k * job.everyMs + offset;
-        if (t <= from || !isSending(host, t)) continue;
-        docs.push({ index: `filebeat-sim-${day(t)}`, doc: backupDoc(host, job, t) });
-      }
-    }
-  }
-  return docs;
+  return backupRunsBetween(from, to).map(({ host, run }) => {
+    const failed = run.status === 'FAILED';
+    return {
+      index: `filebeat-sim-${day(run.finishedAt.getTime())}`,
+      doc: {
+        '@timestamp': run.finishedAt.toISOString(),
+        host: { name: host.hostname },
+        agent: { type: 'filebeat', version: '8.15.3' },
+        event: { dataset: 'synra.backup' },
+        log: { level: failed ? 'error' : 'info' },
+        message: `backup ${run.jobName} ${run.status}`,
+        synra: {
+          backup: {
+            job: run.jobName,
+            type: run.type,
+            status: failed ? 'failed' : 'success',
+            started_at: run.startedAt.toISOString(),
+            size_bytes: run.sizeBytes,
+            duration_s: run.durationSec,
+            target: run.target,
+            ...(run.message ? { message: run.message } : {}),
+          },
+        },
+      },
+    };
+  });
 }
 
 // ------------------------------------------------------------------ ES
