@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, StreamableFile } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AlertStatus, AuditAction } from '@prisma/client';
 import { createHash, randomUUID } from 'node:crypto';
@@ -11,6 +11,7 @@ import { AuthUser } from '../../common/decorators/current-user.decorator';
 import { RequestMeta } from '../../common/decorators/request-meta.decorator';
 import { MSG } from '../../common/constants/messages';
 import { alertCode } from '../notifications/alert-message';
+import { ADMIN_ROLE_CODE } from '../../common/permissions';
 
 export const ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
 export const ATTACHMENT_MAX_FILES_PER_UPLOAD = 5;
@@ -113,7 +114,11 @@ export class AlertAttachmentsService {
     });
   }
 
-  async remove(alertId: string, attachmentId: string, _actor: AuthUser, _meta: RequestMeta) {
+  async remove(alertId: string, attachmentId: string, actor: AuthUser, _meta: RequestMeta) {
+    if (actor.roleCode !== ADMIN_ROLE_CODE) {
+      throw new ForbiddenException('Hanya Administrator yang dapat menghapus lampiran bukti remediasi.');
+    }
+
     const alert = await this.prisma.alert.findUnique({ where: { id: alertId } });
     if (!alert) throw new NotFoundException(MSG.ALERT_NOT_FOUND);
     if (alert.status === AlertStatus.CLOSED) {
